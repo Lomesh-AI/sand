@@ -1,0 +1,339 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engineering Knowledge Agent</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --ink: #17202a;
+            --muted: #687381;
+            --line: #dfe4e8;
+            --surface: #ffffff;
+            --canvas: #f5f7f8;
+            --accent: #245f73;
+            --accent-soft: #e8f1f4;
+            --shadow: 0 10px 30px rgba(27, 42, 52, 0.08);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--canvas);
+            color: var(--ink);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .app {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            border-bottom: 1px solid var(--line);
+            background: var(--surface);
+        }
+
+        .header-inner, main {
+            width: min(100% - 40px, 920px);
+            margin: 0 auto;
+        }
+
+        .header-inner { padding: 28px 0 24px; }
+
+        h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            letter-spacing: -0.01em;
+        }
+
+        .subtitle {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        main {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            padding: 34px 0 28px;
+        }
+
+        #conversation {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            gap: 18px;
+            min-height: 280px;
+        }
+
+        .empty-state {
+            margin: auto;
+            color: var(--muted);
+            font-size: 0.95rem;
+            text-align: center;
+        }
+
+        .message {
+            max-width: 84%;
+            padding: 15px 18px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            line-height: 1.6;
+        }
+
+        .message.user {
+            align-self: flex-end;
+            border-color: #cbdde3;
+            background: var(--accent-soft);
+        }
+
+        .message.assistant { align-self: flex-start; }
+
+        .message-label {
+            margin-bottom: 6px;
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .message p { margin: 0 0 12px; }
+        .message p:last-child { margin-bottom: 0; }
+        .message h2, .message h3 { margin: 18px 0 8px; line-height: 1.3; }
+        .message h2 { font-size: 1.05rem; }
+        .message h3 { font-size: 0.98rem; }
+        .message ul, .message ol { margin: 8px 0 12px; padding-left: 22px; }
+        .message code { padding: 2px 5px; border-radius: 4px; background: #eef1f2; font-size: 0.9em; }
+        .message pre { overflow-x: auto; padding: 12px; border-radius: 6px; background: #202a30; color: #f2f5f6; }
+        .message pre code { padding: 0; background: transparent; }
+
+        .activity {
+            align-self: flex-start;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
+
+        .activity::before {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent);
+            content: "";
+        }
+
+        .composer {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            margin-top: 26px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+
+        textarea {
+            flex: 1;
+            min-height: 44px;
+            max-height: 160px;
+            padding: 11px 12px;
+            resize: vertical;
+            border: 0;
+            outline: 0;
+            color: var(--ink);
+            background: transparent;
+            font: inherit;
+            line-height: 1.4;
+        }
+
+        button {
+            min-width: 76px;
+            height: 42px;
+            padding: 0 16px;
+            border: 0;
+            border-radius: 7px;
+            background: var(--accent);
+            color: white;
+            cursor: pointer;
+            font: inherit;
+            font-weight: 650;
+        }
+
+        button:hover:not(:disabled) { background: #1d4d5d; }
+        button:disabled { cursor: wait; opacity: 0.55; }
+        .error { color: #a33e3e; }
+
+        @media (max-width: 600px) {
+            .header-inner, main { width: min(100% - 24px, 920px); }
+            .header-inner { padding: 22px 0 18px; }
+            main { padding-top: 22px; }
+            .message { max-width: 94%; }
+            .composer { align-items: stretch; }
+            button { height: auto; }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <header>
+        <div class="header-inner">
+            <h1>Engineering Knowledge Agent</h1>
+            <p class="subtitle">Search architecture decisions, runbooks, and engineering documentation.</p>
+        </div>
+    </header>
+
+    <main>
+        <section id="conversation" aria-live="polite">
+            <div class="empty-state" id="empty-state">Ask a question about the engineering knowledge base.</div>
+        </section>
+
+        <form class="composer" id="composer">
+            <textarea id="message" rows="1" placeholder="Ask an engineering question..." aria-label="Message"></textarea>
+            <button id="send" type="submit">Send</button>
+        </form>
+    </main>
+</div>
+
+<script>
+    const composer = document.getElementById("composer");
+    const input = document.getElementById("message");
+    const send = document.getElementById("send");
+    const conversation = document.getElementById("conversation");
+    const emptyState = document.getElementById("empty-state");
+
+    function scrollToLatest() {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    }
+
+    function addActivity(text) {
+        const activity = document.createElement("div");
+        activity.className = "activity";
+        activity.textContent = text;
+        conversation.appendChild(activity);
+        scrollToLatest();
+    }
+
+    function escapeHtml(value) {
+        return value.replace(/[&<>"']/g, character => ({
+            "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        }[character]));
+    }
+
+    function markdown(value) {
+        let html = escapeHtml(value);
+        const codeBlocks = [];
+        html = html.replace(/```(?:[\w-]+)?\n?([\s\S]*?)```/g, (_, code) => {
+            codeBlocks.push(`<pre><code>${code.trim()}</code></pre>`);
+            return `@@CODE${codeBlocks.length - 1}@@`;
+        });
+        html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>")
+            .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+            .replace(/`([^`]+)`/g, "<code>$1</code>")
+            .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+            .replace(/^- (.+)$/gm, "<li>$1</li>")
+            .replace(/(?:<li>.*<\/li>\n?)+/g, list => `<ul>${list}</ul>`)
+            .replace(/\n\n/g, "</p><p>")
+            .replace(/\n/g, "<br>");
+        html = `<p>${html}</p>`;
+        return html.replace(/@@CODE(\d+)@@/g, (_, index) => codeBlocks[index]);
+    }
+
+    function addMessage(role, content) {
+        const message = document.createElement("article");
+        message.className = `message ${role}`;
+        message.innerHTML = `<div class="message-label">${role === "user" ? "You" : "Assistant"}</div>`;
+        const body = document.createElement("div");
+        body.innerHTML = role === "assistant" ? markdown(content) : escapeHtml(content).replace(/\n/g, "<br>");
+        message.appendChild(body);
+        conversation.appendChild(message);
+        scrollToLatest();
+        return body;
+    }
+
+    function addError(text) {
+        const error = document.createElement("div");
+        error.className = "activity error";
+        error.textContent = text;
+        conversation.appendChild(error);
+        scrollToLatest();
+    }
+
+    async function sendMessage(message) {
+        emptyState.hidden = true;
+        addMessage("user", message);
+        send.disabled = true;
+        input.disabled = true;
+
+        try {
+            const response = await fetch("/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message })
+            });
+            if (!response.ok || !response.body) throw new Error("The agent could not be reached.");
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let answerBody = null;
+
+            function renderEvent(event) {
+                if (event.type === "tool_call") addActivity("🔍 Searching knowledge base...");
+                if (event.type === "tool_result") addActivity("📄 Retrieved documents...");
+                if (event.type === "answer") {
+                    answerBody = answerBody || addMessage("assistant", "");
+                    answerBody.innerHTML = markdown(event.content || "");
+                    scrollToLatest();
+                }
+            }
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop();
+                for (const line of lines) if (line.trim()) renderEvent(JSON.parse(line));
+            }
+            buffer += decoder.decode();
+            if (buffer.trim()) renderEvent(JSON.parse(buffer));
+        } catch (error) {
+            addError(error.message || "Something went wrong while contacting the agent.");
+        } finally {
+            send.disabled = false;
+            input.disabled = false;
+            input.focus();
+        }
+    }
+
+    composer.addEventListener("submit", event => {
+        event.preventDefault();
+        const message = input.value.trim();
+        if (!message || send.disabled) return;
+        input.value = "";
+        sendMessage(message);
+    });
+
+    input.addEventListener("keydown", event => {
+        if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            composer.requestSubmit();
+        }
+    });
+</script>
+</body>
+</html>

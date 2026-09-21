@@ -1,0 +1,50 @@
+import numpy as np
+
+class HybridRetrieval:
+
+    def __init__(self, vector_store, bm25_store, embedder, chunks):
+        self.vector_store = vector_store
+        self.bm25_store = bm25_store
+        self.embedder = embedder
+        self.chunks = chunks
+
+    def search(self, query_text, top_k=5, alpha=0.5):
+        
+        query_embedding = self.embedder.embed_query(query_text)
+        semantic_scores, semantic_indices = self.vector_store.search(query_embedding, top_k=top_k)
+        bm25_results = self.bm25_store.search(query_text, top_k=top_k)
+
+        semantic = np.zeros(len(self.chunks))
+        bm25 = np.zeros(len(self.chunks))
+
+        for score, idx in zip(semantic_scores, semantic_indices):
+            semantic[idx] = score
+        
+        for score, idx in bm25_results:
+            bm25[idx] = score
+        
+        semantic = self._normalize_scores(semantic)
+        bm25 = self._normalize_scores(bm25)
+
+        hybrid = (
+            alpha * semantic
+            + (1 - alpha) * bm25
+        )
+
+        top_indices = hybrid.argsort()[-top_k:][::-1][:top_k]
+
+        return [
+            (hybrid[idx], idx)
+            for idx in top_indices
+        ]
+    
+    def _normalize_scores(self, scores):
+        min_score = np.min(scores)
+        max_score = np.max(scores)
+
+        if max_score - min_score == 0:
+            return np.zeros_like(scores)
+
+        return (scores - min_score) / (max_score - min_score)
+    
+

@@ -1,0 +1,723 @@
+openapi: 3.1.0
+info:
+  title: AppSec Incident Lab — Findings API
+  description: |
+    Production-oriented API for ingesting, querying, and managing security findings.
+    Demonstrates idempotency, transactional outbox, JWT auth, and structured problem responses.
+  version: 1.0.0
+  contact:
+    name: AppSec Incident Lab
+    url: https://github.com/josuebarros1995/appsec-incident-lab
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: http://localhost:8081
+    description: Local development
+  - url: http://localhost:8088/api
+    description: Via Nginx reverse proxy
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  /health/live:
+    get:
+      summary: Liveness probe
+      description: Returns 200 if the process is running. Used by Kubernetes livenessProbe.
+      operationId: healthLive
+      security: []
+      responses:
+        "200":
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /health/ready:
+    get:
+      summary: Readiness probe
+      description: |
+        Returns 200 if all dependencies (MongoDB, Redis, RabbitMQ) are reachable.
+        Returns 503 if any dependency is down.
+      operationId: healthReady
+      security: []
+      responses:
+        "200":
+          description: All dependencies healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReady"
+        "503":
+          description: One or more dependencies unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReady"
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: Returns Prometheus exposition format metrics.
+      operationId: getMetrics
+      security: []
+      responses:
+        "200":
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/v1/findings:
+    post:
+      summary: Create a finding
+      description: |
+        Ingests a new security finding. The request is idempotent when an
+        `Idempotency-Key` header is provided.
+
+        **Idempotency behavior:**
+        - First request with a given key → `201 Created` (or `202 Accepted`)
+        - Replay with same key and same payload → `200 OK`
+        - Replay with same key but different payload → `409 Conflict`
+
+        The finding is persisted to MongoDB and an outbox message is written
+        atomically. A background publisher drains the outbox to RabbitMQ.
+      operationId: createFinding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFindingInput"
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: |
+            Client-generated key for idempotent request semantics.
+            Must be unique per operation. Replays with the same key
+            return the cached response.
+      responses:
+        "202":
+          description: Finding accepted for async processing
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URI of the created finding
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "200":
+          description: Idempotent replay — finding already existed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency conflict — same key, different payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+    get:
+      summary: List findings
+      description: |
+        Returns a paginated list of findings scoped to the authenticated tenant.
+        Supports filtering by severity, status, processing_status, and scanner.
+      operationId: listFindings
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [critical, high, medium, low, informational]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, acknowledged, in_progress, resolved, false_positive]
+        - name: processing_status
+          in: query
+          schema:
+            type: string
+            enum:
+              [received, queued, processing, processed, failed, dead_lettered]
+        - name: scanner
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 200
+        - name: skip
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of findings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Finding"
+                  count:
+                    type: integer
+
+  /api/v1/findings/{id}:
+    get:
+      summary: Get a finding by ID
+      description: Returns a single finding scoped to the authenticated tenant.
+      operationId: getFinding
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Finding found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "404":
+          description: Finding not found (or not visible to this tenant)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/v1/findings/{id}/status:
+    patch:
+      summary: Update finding status
+      description: |
+        Applies a state transition with optimistic concurrency control.
+        The `expected_version` must match the current `processing_version`.
+      operationId: patchStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    [open, acknowledged, in_progress, resolved, false_positive]
+                expected_version:
+                  type: integer
+                  description: Current processing_version for optimistic locking
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+        "409":
+          description: Version mismatch — retry with current processing_version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Finding not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/v1/findings/bulk:
+    post:
+      summary: Bulk create findings
+      description: |
+        Creates up to 100 findings in a single request. Each finding is
+        validated independently. Partial success is not supported — if any
+        item fails, the entire batch is rejected.
+      operationId: bulkCreateFindings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 100
+              items:
+                $ref: "#/components/schemas/CreateFindingInput"
+      responses:
+        "202":
+          description: All findings accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Finding"
+        "400":
+          description: Validation failed or batch too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/v1/findings/bulk/status:
+    patch:
+      summary: Bulk update finding status
+      description: |
+        Updates the status of up to 100 findings in a single request.
+        Findings that do not exist or fail optimistic locking are skipped.
+      operationId: bulkUpdateStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, status]
+              properties:
+                ids:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: string
+                    format: uuid
+                status:
+                  type: string
+                  enum:
+                    [open, acknowledged, in_progress, resolved, false_positive]
+      responses:
+        "200":
+          description: Status updated for some or all findings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+                  ids:
+                    type: array
+                    items:
+                      type: string
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/v1/audit-logs:
+    get:
+      summary: List audit logs
+      description: |
+        Returns audit log entries scoped to the authenticated tenant.
+        Supports filtering by action, resource_id, and actor_id.
+      operationId: listAuditLogs
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum:
+              [
+                create_finding,
+                bulk_create_finding,
+                update_status,
+                bulk_update_status,
+              ]
+        - name: resource_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: actor_id
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 200
+        - name: skip
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditLog"
+                  count:
+                    type: integer
+
+  /api/v1/admin/scenarios/slow-processing:
+    post:
+      summary: Inject slow processing scenario
+      description: |
+        Admin endpoint to simulate a slow worker for incident investigation.
+        Sets `WORKER_PROCESSING_DELAY_MS` in the worker environment.
+      operationId: adminScenarioSlowProcessing
+      responses:
+        "202":
+          description: Scenario accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenario:
+                    type: string
+                  hint:
+                    type: string
+                  id:
+                    type: string
+                  appliedAt:
+                    type: string
+                    format: date-time
+
+  /api/v1/admin/scenarios/processing-failure:
+    post:
+      summary: Inject processing failure scenario
+      description: |
+        Admin endpoint to simulate worker failures for incident investigation.
+        Sets `WORKER_FAILURE_RATE` in the worker environment.
+      operationId: adminScenarioProcessingFailure
+      responses:
+        "202":
+          description: Scenario accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenario:
+                    type: string
+                  hint:
+                    type: string
+                  id:
+                    type: string
+                  appliedAt:
+                    type: string
+                    format: date-time
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        HS256 JWT with claims: `tenant_id`, `scope` (array), `iss`, `sub`, `exp`.
+        Mint a dev token with: `go run ./cmd/mint-jwt/main.go --tenant acme-corp`
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Fallback admin key for scripts and scenarios.
+        Also requires `X-Tenant-Id` header.
+
+  schemas:
+    Finding:
+      type: object
+      required:
+        - id
+        - tenant_id
+        - scanner
+        - external_id
+        - repository
+        - application
+        - environment
+        - title
+        - description
+        - severity
+        - status
+        - priority_score
+        - processing_status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+        scanner:
+          type: string
+        external_id:
+          type: string
+        repository:
+          type: string
+        application:
+          type: string
+        environment:
+          type: string
+          enum: [dev, staging, prod]
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [critical, high, medium, low, informational]
+        cvss_score:
+          type: number
+          minimum: 0
+          maximum: 10
+        cwe:
+          type: string
+        file_path:
+          type: string
+        line_number:
+          type: integer
+        status:
+          type: string
+          enum: [open, acknowledged, in_progress, resolved, false_positive]
+        priority_score:
+          type: integer
+        remediation_guidance:
+          type: string
+        processing_status:
+          type: string
+          enum: [received, queued, processing, processed, failed, dead_lettered]
+        retry_count:
+          type: integer
+        processing_version:
+          type: integer
+        internet_exposed:
+          type: boolean
+        repository_critical:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+        correlation_id:
+          type: string
+        schema_version:
+          type: integer
+
+    CreateFindingInput:
+      type: object
+      required:
+        - tenant_id
+        - scanner
+        - external_id
+        - repository
+        - application
+        - environment
+        - title
+        - description
+        - severity
+      properties:
+        tenant_id:
+          type: string
+        scanner:
+          type: string
+          minLength: 1
+          maxLength: 64
+        external_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        repository:
+          type: string
+        application:
+          type: string
+        environment:
+          type: string
+          enum: [dev, staging, prod]
+        title:
+          type: string
+          minLength: 1
+          maxLength: 512
+        description:
+          type: string
+          minLength: 1
+        severity:
+          type: string
+          enum: [critical, high, medium, low, informational]
+        cvss_score:
+          type: number
+          minimum: 0
+          maximum: 10
+        cwe:
+          type: string
+        file_path:
+          type: string
+        line_number:
+          type: integer
+        internet_exposed:
+          type: boolean
+        repository_critical:
+          type: boolean
+
+    Problem:
+      type: object
+      properties:
+        type:
+          type: string
+          example: about:blank
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        correlationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    HealthReady:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        checks:
+          type: object
+          properties:
+            mongodb:
+              type: string
+              enum: [up, down]
+            redis:
+              type: string
+              enum: [up, down]
+            rabbitmq:
+              type: string
+              enum: [up, down]
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+        action:
+          type: string
+          enum:
+            [
+              create_finding,
+              bulk_create_finding,
+              update_status,
+              bulk_update_status,
+            ]
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        resource_ids:
+          type: array
+          items:
+            type: string
+        actor_id:
+          type: string
+        actor_type:
+          type: string
+        before:
+          type: object
+        after:
+          type: object
+        correlation_id:
+          type: string
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+        created_at:
+          type: string
+          format: date-time

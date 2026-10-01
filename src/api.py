@@ -1,43 +1,79 @@
 from pathlib import Path
 import sys
+import os
+import json
+import uuid
+from contextlib import asynccontextmanager
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+SRC_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = SRC_DIR.parent
+WORKSPACE_DIR = PROJECT_DIR.parent
+sys.path.insert(0, str(SRC_DIR))
+
+# Fix Windows console UnicodeEncodeError (cp1252) when printing events
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+# Load .env file before initializing agent/langchain
+from dotenv import load_dotenv
+
+for env_file in [SRC_DIR / ".env", PROJECT_DIR / ".env", WORKSPACE_DIR / ".env"]:
+    if env_file.exists():
+        load_dotenv(env_file, override=False)
+
+# Normalize LangSmith / LangChain tracing environment variables
+if os.environ.get("LANGSMITH_TRACING", "").lower() in ("true", "1") or os.environ.get("LANGCHAIN_TRACING_V2", "").lower() in ("true", "1"):
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGSMITH_TRACING"] = "true"
+
+if os.environ.get("LANGSMITH_API_KEY") and not os.environ.get("LANGCHAIN_API_KEY"):
+    os.environ["LANGCHAIN_API_KEY"] = os.environ["LANGSMITH_API_KEY"]
+
+if os.environ.get("LANGSMITH_PROJECT") and not os.environ.get("LANGCHAIN_PROJECT"):
+    os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGSMITH_PROJECT"]
 
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-import json
-import uuid
+from langchain_core.tracers.langchain import LangChainTracer
 
-from src.agent.tools import mcp_client
-from src.agent.graph import graph
+from agent.tools import mcp_client
+from agent.graph import graph
 
 
-app = FastAPI(title="Engineering Knowledge Agent")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("MCP client connecting...")
+    await mcp_client.connect()
+    print("MCP session after startup:", mcp_client.session)
+    yield
+    print("MCP client closing...")
+    await mcp_client.close()
+    print("MCP session after shutdown:", mcp_client.session)
+
+
+app = FastAPI(title="Engineering Knowledge Agent", lifespan=lifespan)
+
+static_dir = Path(__file__).resolve().parent / "static"
 
 app.mount(
     "/static",
-    StaticFiles(directory="src/static", html=True),
+    StaticFiles(directory=str(static_dir), html=True),
     name="static"
 )
 
 
 class ChatRequest(BaseModel):
     message: str
-
-
-@app.on_event("startup")
-async def startup():
-    await mcp_client.connect()
-    print("MCP session after startup:", mcp_client.session)
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    print("MCP session before shutdown:", mcp_client.session)
-    await mcp_client.close()
-    print("MCP session after shutdown:", mcp_client.session)
 
 
 @app.post("/chat")
@@ -48,10 +84,25 @@ async def chat(request: ChatRequest):
     print("Chat thread_id:", thread_id)
     print("MCP session before request:", mcp_client.session)
 
+    project_name = (
+        os.environ.get("LANGSMITH_PROJECT")
+        or os.environ.get("LANGCHAIN_PROJECT")
+        or "engineering-knowledge-agent"
+    )
+    tracer = LangChainTracer(project_name=project_name)
+
     config = {
         "configurable": {
             "thread_id": thread_id
-        }
+        },
+        "callbacks": [tracer],
+        "run_name": "Engineering Knowledge Agent Chat",
+        "metadata": {
+            "thread_id": thread_id,
+            "user_query": request.message,
+            "session_id": thread_id,
+        },
+        "tags": ["ui-query", "web-chat"],
     }
 
     async def event_generator():
@@ -69,7 +120,11 @@ async def chat(request: ChatRequest):
                 config=config,
                 stream_mode="updates",
             ):
-                print("LangGraph event:", thread_id, event)
+                # Safe debug print for Windows consoles
+                try:
+                    print("LangGraph event:", thread_id, event)
+                except Exception:
+                    pass
 
                 if "agent" in event:
 
@@ -98,6 +153,10 @@ async def chat(request: ChatRequest):
         finally:
             print("Event generator ended:", thread_id)
             print("MCP session after request:", mcp_client.session)
+            try:
+                tracer.wait_for_futures()
+            except Exception:
+                pass
 
     return StreamingResponse(
         event_generator(),
@@ -107,3 +166,8 @@ async def chat(request: ChatRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

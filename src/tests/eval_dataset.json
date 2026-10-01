@@ -1,0 +1,92 @@
+[
+  {
+    "id": "direct_01_greeting",
+    "category": "direct_conversational",
+    "query": "Hello! What can you help me with?",
+    "expected_route": "FINISH",
+    "expected_tools": [],
+    "require_citation": false,
+    "description": "Greeting query should be answered directly by supervisor without delegating to specialists or executing tools."
+  },
+  {
+    "id": "direct_02_capabilities",
+    "category": "direct_conversational",
+    "query": "Explain your capabilities as the engineering orchestrator and what specialist agents you coordinate.",
+    "expected_route": "FINISH",
+    "expected_tools": [],
+    "require_citation": false,
+    "description": "Direct question about agent capabilities answered directly by supervisor."
+  },
+  {
+    "id": "direct_03_simple_math",
+    "category": "direct_conversational",
+    "query": "What is 15 * 8?",
+    "expected_route": "FINISH",
+    "expected_tools": [],
+    "require_citation": false,
+    "description": "Basic conversational/logical query that should not trigger external tools."
+  },
+  {
+    "id": "docs_01_adr_listing",
+    "category": "docs_architecture",
+    "query": "What architecture decision records (ADRs) exist in this project?",
+    "expected_route": "docs_specialist",
+    "expected_tools": ["list_decisions", "search_knowledge"],
+    "require_citation": true,
+    "description": "ADR listing query should route to docs specialist and return list of ADRs."
+  },
+  {
+    "id": "docs_02_security_requirements",
+    "category": "docs_architecture",
+    "query": "What are the security requirements and authentication mechanisms in this system?",
+    "expected_route": "docs_specialist",
+    "expected_tools": ["search_knowledge"],
+    "require_citation": true,
+    "description": "Core security doc search (reproducing user query), verifying single-call retrieval without looping."
+  },
+  {
+    "id": "docs_03_idempotency_adr",
+    "category": "docs_architecture",
+    "query": "Explain the three-tier idempotency strategy described in our ADRs.",
+    "expected_route": "docs_specialist",
+    "expected_tools": ["search_knowledge", "get_document"],
+    "require_citation": true,
+    "description": "Specific ADR topic search grounded in ADR 0003."
+  },
+  {
+    "id": "docs_04_runbook_procedures",
+    "category": "docs_architecture",
+    "query": "What are the troubleshooting steps in our runbooks for incident handling?",
+    "expected_route": "docs_specialist",
+    "expected_tools": ["search_knowledge"],
+    "require_citation": true,
+    "description": "Runbook operational documentation search."
+  },
+  {
+    "id": "github_01_list_prs",
+    "category": "github_codebase",
+    "query": "List the open pull requests in repository Lomesh-AI/sand.",
+    "expected_route": "github_specialist",
+    "expected_tools": ["list_github_prs"],
+    "require_citation": false,
+    "description": "GitHub PR listing query routing to github specialist."
+  },
+  {
+    "id": "github_02_list_files",
+    "category": "github_codebase",
+    "query": "Show the files and directories in repository Lomesh-AI/sand.",
+    "expected_route": "github_specialist",
+    "expected_tools": ["list_github_files", "search_github"],
+    "require_citation": false,
+    "description": "Repository structure inspection query."
+  },
+  {
+    "id": "github_03_error_resilience",
+    "category": "github_codebase",
+    "query": "Check open pull requests in repository invalid-nonexistent-org-9999/dummy-repo-xyz.",
+    "expected_route": "github_specialist",
+    "expected_tools": ["list_github_prs"],
+    "require_citation": false,
+    "description": "404 Not Found error resilience test verifying clean error message without retry loops."
+  }
+]

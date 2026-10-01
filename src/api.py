@@ -126,27 +126,69 @@ async def chat(request: ChatRequest):
                 except Exception:
                     pass
 
-                if "agent" in event:
+                # Multi-Agent Event Streaming
+                if "supervisor" in event:
+                    sup_data = event["supervisor"]
+                    next_step = sup_data.get("next_step")
+                    if next_step and next_step != "FINISH":
+                        agent_labels = {
+                            "docs_specialist": "Documentation & Architecture Specialist",
+                            "github_specialist": "GitHub & Codebase Specialist",
+                        }
+                        label = agent_labels.get(next_step, next_step)
+                        yield json.dumps({
+                            "type": "status",
+                            "content": f"📋 Supervisor routing to {label}..."
+                        }) + "\n"
 
+                    if "messages" in sup_data and sup_data["messages"]:
+                        message = sup_data["messages"][-1]
+                        if message.content and not getattr(message, "tool_calls", None):
+                            yield json.dumps({
+                                "type": "answer",
+                                "content": message.content
+                            }) + "\n"
+
+                elif "docs_specialist" in event:
+                    spec_data = event["docs_specialist"]
+                    if "messages" in spec_data and spec_data["messages"]:
+                        message = spec_data["messages"][-1]
+                        if getattr(message, "tool_calls", None):
+                            yield json.dumps({
+                                "type": "tool_call",
+                                "agent": "docs_specialist",
+                                "tool": message.tool_calls[0]["name"]
+                            }) + "\n"
+
+                elif "github_specialist" in event:
+                    spec_data = event["github_specialist"]
+                    if "messages" in spec_data and spec_data["messages"]:
+                        message = spec_data["messages"][-1]
+                        if getattr(message, "tool_calls", None):
+                            yield json.dumps({
+                                "type": "tool_call",
+                                "agent": "github_specialist",
+                                "tool": message.tool_calls[0]["name"]
+                            }) + "\n"
+
+                elif "docs_tools" in event or "github_tools" in event or "tools" in event:
+                    yield json.dumps({
+                        "type": "tool_result"
+                    }) + "\n"
+
+                # Backwards-compatibility for single-agent nodes
+                elif "agent" in event:
                     message = event["agent"]["messages"][0]
-
-                    if message.tool_calls:
+                    if getattr(message, "tool_calls", None):
                         yield json.dumps({
                             "type": "tool_call",
                             "tool": message.tool_calls[0]["name"]
                         }) + "\n"
-
                     elif message.content:
                         yield json.dumps({
                             "type": "answer",
                             "content": message.content
                         }) + "\n"
-
-                elif "tools" in event:
-
-                    yield json.dumps({
-                        "type": "tool_result"
-                    }) + "\n"
         except Exception as exc:
             print("Event generator exception:", thread_id, repr(exc))
             raise

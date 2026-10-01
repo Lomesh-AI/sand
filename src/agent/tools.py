@@ -32,7 +32,14 @@ async def search_knowledge(query: str) -> str:
     #     )
 
     # return "\n\n".join(context)
-    return await mcp_client.search_docs(query)
+    print(f"[tool] search_knowledge entry query={query!r}", flush=True)
+    print(
+        f"[tool] MCP session connected={mcp_client.session is not None}",
+        flush=True,
+    )
+    result = await mcp_client.search_docs(query)
+    print("[tool] search_knowledge return", flush=True)
+    return result
 
 @tool
 async def get_current_time() -> str:

@@ -118,3 +118,26 @@ async def list_github_prs(owner: str, repo: str) -> str:
     """
     List open pull requests in a specific GitHub repository."""
     return await mcp_client.list_github_prs(owner, repo)
+
+
+# --- Tool Partitioning for Multi-Agent Architecture ---
+
+DOCS_TOOLS = [
+    search_knowledge,
+    list_decisions,
+    get_document,
+]
+
+GITHUB_TOOLS = [
+    get_github_file,
+    search_github,
+    list_github_files,
+    list_github_issues,
+    list_github_prs,
+]
+
+GENERAL_TOOLS = [
+    get_current_time,
+]
+
+ALL_TOOLS = DOCS_TOOLS + GITHUB_TOOLS + GENERAL_TOOLS

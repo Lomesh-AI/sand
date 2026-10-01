@@ -2,6 +2,11 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+# Fix UnicodeEncodeError on Windows cp1252 terminals when printing MCP results
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 import asyncio
 
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -12,16 +17,23 @@ from agent.tools import mcp_client
 
 async def main():
 
-    await mcp_client.connect()
-
     try:
-        result = await graph.ainvoke({
-            "messages": [
-                HumanMessage(
-                    content="List the open pull requests in Lomesh-AI/sand."
-                )
-            ]
-        })
+        await mcp_client.connect()
+
+        result = await graph.ainvoke(
+            {
+                "messages": [
+                    HumanMessage(
+                        content="List the commits in Lomesh2000/hadoop."
+                    )
+                ]
+            },
+            config={
+                "configurable": {
+                    "thread_id": "agent-test"
+                }
+            },
+        )
 
         print("\n========== TRACE ==========\n")
 
@@ -53,6 +65,8 @@ async def main():
         print("\n========== END TRACE ==========\n")
 
     finally:
+        # Always runs — even if connect() or graph.ainvoke() fails —
+        # so the stdio contexts are closed cleanly from this task.
         await mcp_client.close()
 
 

@@ -1,11 +1,19 @@
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from mcp.server.mcpserver import MCPServer
 import os
 from github import Github, GithubException
 
-from src.rag.pipeline import RAGPipeline
-from pathlib import Path
-
 github_client = Github(os.environ.get("GITHUB_TOKEN"))
+print(
+    "MCP GITHUB_TOKEN:",
+    bool(os.environ.get("GITHUB_TOKEN")),
+    file=sys.stderr,
+    flush=True
+)
 server = MCPServer("engineering-knowledge")
 
 rag = None
@@ -14,36 +22,76 @@ rag = None
 def get_rag():
     global rag
     if rag is None:
+        from rag.pipeline import RAGPipeline
+
         rag = RAGPipeline("docs")
     return rag
 
 
+# @server.tool()
+# def search_docs(query: str) -> str:
+#     """
+#     Search the engineering knowledge base for relevant documentation.
+
+#     Use this tool when the user asks about system architecture,
+#     engineering decisions, runbooks, security, infrastructure,
+#     or other information contained in the documentation.
+#     """
+
+#     try:
+#         pipeline = get_rag()
+#         results = pipeline.search(query, k=5)
+
+#         if not results:
+#             return "No relevant information found."
+
+#         output = []
+#         for score, idx in results:
+#             chunk = pipeline.chunks[int(idx)]
+#             output.append(
+#                 f"[SOURCE: {chunk['source']}]\n"
+#                 f"[RELEVANCE: {float(score):.3f}]\n"
+#                 f"{chunk['text']}"
+#             )
+
+#         return "\n\n".join(output)
+#     except Exception as exc:
+#         return f"search_docs failed: {type(exc).__name__}: {exc}"
+
 @server.tool()
 def search_docs(query: str) -> str:
-    """
-    Search the engineering knowledge base for relevant documentation.
+    import traceback
+    import sys
 
-    Use this tool when the user asks about system architecture,
-    engineering decisions, runbooks, security, infrastructure,
-    or other information contained in the documentation.
-    """
+    try:
+        print("[search_docs] starting RAG", file=sys.stderr, flush=True)
 
-    results = get_rag().search(query, k=5)
+        pipeline = get_rag()
 
-    if not results:
-        return "No relevant information found."
+        print("[search_docs] RAG initialized", file=sys.stderr, flush=True)
 
-    output = []
+        results = pipeline.search(query, k=5)
 
-    for score, idx in results:
-        chunk = rag.chunks[idx]
-        output.append(
-            f"[SOURCE: {chunk['source']}]\n"
-            f"[RELEVANCE: {score:.3f}]\n"
-            f"{chunk['text']}"
-        )
+        print("[search_docs] search completed", file=sys.stderr, flush=True)
 
-    return "\n\n".join(output)
+        if not results:
+            return "No relevant information found."
+
+        output = []
+
+        for score, idx in results:
+            chunk = pipeline.chunks[int(idx)]
+            output.append(
+                f"[SOURCE: {chunk['source']}]\n"
+                f"[RELEVANCE: {float(score):.3f}]\n"
+                f"{chunk['text']}"
+            )
+
+        return "\n\n".join(output)
+
+    except Exception as exc:
+        traceback.print_exc(file=sys.stderr)
+        return f"search_docs failed: {type(exc).__name__}: {exc}"
 
 @server.tool()
 def list_decisions() -> str:
@@ -197,32 +245,83 @@ def list_github_issues(owner: str, repo: str) -> str:
 
     return "\n\n".join(results)
 
+# @server.tool()
+# def list_github_prs(owner: str, repo: str) -> str:
+#     """
+#     List open pull requests in a GitHub repository.
+#     """
+#     repository = github_client.get_repo(f"{owner}/{repo}")
+
+#     prs = repository.get_pulls(state="open")
+
+#     results = []
+
+#     for i, pr in enumerate(prs):
+#         if i >= 10:
+#             break
+
+#         results.append(
+#             f"[PR #{pr.number}]\n"
+#             f"[TITLE: {pr.title}]\n"
+#             f"[AUTHOR: {pr.user.login}]\n"
+#             f"[URL: {pr.html_url}]"
+#         )
+
+#     if not results:
+#         return "No open pull requests found."
+
+#     return "\n\n".join(results)
+
 @server.tool()
 def list_github_prs(owner: str, repo: str) -> str:
-    """
-    List open pull requests in a GitHub repository.
-    """
-    repository = github_client.get_repo(f"{owner}/{repo}")
+    print(
+    ">>> list_github_prs ENTERED",
+    owner,
+    repo,
+    file=sys.stderr,
+    flush=True,
+    )
+    try:
+        repository = github_client.get_repo(f"{owner}/{repo}")
 
-    prs = repository.get_pulls(state="open")
+        prs = repository.get_pulls(state="open")
 
-    results = []
+        results = []
 
-    for i, pr in enumerate(prs):
-        if i >= 10:
-            break
+        for pr in prs:
+            results.append(
+                f"#{pr.number} {pr.title}\n"
+                f"Author: {pr.user.login}\n"
+                f"URL: {pr.html_url}"
+            )
 
-        results.append(
-            f"[PR #{pr.number}]\n"
-            f"[TITLE: {pr.title}]\n"
-            f"[AUTHOR: {pr.user.login}]\n"
-            f"[URL: {pr.html_url}]"
-        )
+        if not results:
+            return "No open pull requests."
 
-    if not results:
-        return "No open pull requests found."
+        return "\n\n".join(results)
 
-    return "\n\n".join(results)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return f"ERROR: {type(exc).__name__}: {exc}"
 
 if __name__ == "__main__":
-    server.run()
+    print("MCP SERVER STARTING", file=sys.stderr, flush=True)
+
+    import threading
+
+    def _warmup():
+        try:
+            get_rag()
+            print("RAG PIPELINE READY", file=sys.stderr, flush=True)
+        except Exception as exc:
+            print(f"Warning: RAG warm-up failed: {exc}", file=sys.stderr, flush=True)
+
+    threading.Thread(target=_warmup, daemon=True).start()
+
+    try:
+        server.run()
+    except Exception:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        raise

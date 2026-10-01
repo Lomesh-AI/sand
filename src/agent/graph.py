@@ -1,14 +1,15 @@
 import os
 from pathlib import Path
-from typing import TypedDict
+from typing import Literal
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
+from langchain_core.messages import SystemMessage, AIMessage, ToolMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.graph import StateGraph, START, MessagesState
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.graph import StateGraph, START, END, MessagesState
+from langgraph.prebuilt import ToolNode
 
 # Load .env from src/ or project root
 SRC_DIR = Path(__file__).resolve().parents[1]
@@ -29,151 +30,330 @@ if os.environ.get("LANGSMITH_PROJECT") and not os.environ.get("LANGCHAIN_PROJECT
     os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGSMITH_PROJECT"]
 
 from .tools import (
-    search_knowledge,
-    get_current_time,
-    list_decisions,
-    get_document,
-    get_github_file,
-    search_github,
-    list_github_files,
-    list_github_issues,
-    list_github_prs,
+    DOCS_TOOLS,
+    GITHUB_TOOLS,
+    GENERAL_TOOLS,
+    ALL_TOOLS,
+)
+from .prompts import (
+    SUPERVISOR_SYSTEM_PROMPT,
+    DOCS_SPECIALIST_PROMPT,
+    GITHUB_SPECIALIST_PROMPT,
 )
 
-tools = [
-    search_knowledge,
-    get_current_time,
-    list_decisions,
-    get_document,
-    get_github_file,
-    search_github,
-    list_github_files,
-    list_github_issues,
-    list_github_prs,
-]
+# Backwards compatibility export
+tools = ALL_TOOLS
 
 
-def _get_llm_and_tools():
+def _get_base_llm():
     api_key = (
         os.environ.get("XAI_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("OPENAI_ADMIN_KEY")
     )
     if not api_key:
-        return None, None
+        return None
 
-    llm = ChatOpenAI(
+    return ChatOpenAI(
         model_name="openai/gpt-oss-20b",
         api_key=api_key,
         base_url="https://api.groq.com/openai/v1",
+        temperature=0.0,
+        max_retries=5,
     )
-    return llm, llm.bind_tools(tools=tools)
 
 
-llm, llm_with_tools = _get_llm_and_tools()
+# --- Multi-Agent State & Router Models ---
+
+class TeamState(MessagesState):
+    next_step: str
+    visited_specialists: list[str]
 
 
-class AgentState(MessagesState):
-    user_query: str
-    knowledge_result: str
-    github_result: str
+# Backwards compatibility alias
+AgentState = TeamState
 
 
-async def agent(state: AgentState, config: RunnableConfig = None) -> dict[str, list[AIMessage]]:
-    global llm, llm_with_tools
-    if llm_with_tools is None:
-        llm, llm_with_tools = _get_llm_and_tools()
+class RouterDecision(BaseModel):
+    next_step: Literal["docs_specialist", "github_specialist", "FINISH"] = Field(
+        description="Next agent to delegate to: 'docs_specialist', 'github_specialist', or 'FINISH'."
+    )
+    reasoning: str = Field(
+        description="Short reason explaining the delegation choice or why we are finishing."
+    )
 
-    last_message = state["messages"][-1] if state["messages"] else None
-    if (
-        isinstance(last_message, ToolMessage)
-        and isinstance(last_message.content, str)
-        and last_message.content.startswith("search_docs failed:")
-    ):
+
+# --- Nodes ---
+
+async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> dict:
+    llm = _get_base_llm()
+    if llm is None:
         return {
             "messages": [
-                AIMessage(
-                    content=(
-                        "The knowledge search failed and was not retried. "
-                        f"{last_message.content}"
-                    )
-                )
-            ]
+                AIMessage(content="I don't have a valid LLM API key configured in this environment.")
+            ],
+            "next_step": "FINISH",
         }
 
-    if llm_with_tools is None:
-        return {
-            "messages": [
-                AIMessage(
-                    content=(
-                        "I don't have a valid LLM API key in this environment, "
-                        "so I cannot query the live model."
-                    )
-                )
-            ]
-        }
+    visited = list(state.get("visited_specialists") or [])
 
-    system_message = SystemMessage(
+    # If a specialist has already completed investigation, synthesize the final response immediately
+    if visited:
+        # If a single specialist already produced a complete text response, adopt it directly
+        last_msg = state["messages"][-1] if state["messages"] else None
+        if isinstance(last_msg, AIMessage) and last_msg.content and not getattr(last_msg, "tool_calls", None):
+            return {"messages": [last_msg], "next_step": "FINISH"}
+
+        # Otherwise synthesize across specialist findings using clean text context
+        findings = []
+        user_query = ""
+        for m in state["messages"]:
+            if isinstance(m, HumanMessage):
+                user_query = m.content
+            elif isinstance(m, AIMessage) and m.content and not getattr(m, "tool_calls", None):
+                findings.append(m.content)
+            elif isinstance(m, ToolMessage):
+                findings.append(str(m.content))
+
+        context_str = "\n\n".join(findings)
+        synthesis_prompt = SystemMessage(
+            content=(
+                "You are the Lead Engineering Orchestrator.\n"
+                "The specialist investigation is complete. Below are the findings collected:\n"
+                "--------------------\n"
+                f"{context_str}\n"
+                "--------------------\n"
+                "Synthesize the findings into a clear, professional, and well-structured engineering response. "
+                "Cite all relevant documents, ADRs, or repository findings. Write in clean markdown text."
+            )
+        )
+        response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
+        return {"messages": [response], "next_step": "FINISH"}
+
+    # Formulate initial routing decision
+    router_llm = llm.with_structured_output(RouterDecision)
+    router_prompt = SystemMessage(
         content=(
-            "You are an engineering knowledge assistant. "
-            "Use the available tools whenever you need information "
-            "from the engineering knowledge base. "
-            "Do not invent information."
+            f"{SUPERVISOR_SYSTEM_PROMPT}\n\n"
+            "Decide whether to delegate to 'docs_specialist', 'github_specialist', or 'FINISH'.\n"
+            "- If the query is about architecture, decisions (ADRs), or docs -> 'docs_specialist'.\n"
+            "- If the query is about repositories, code, pull requests, or issues -> 'github_specialist'.\n"
+            "- If the query is a simple greeting or general question requiring no external tools -> 'FINISH'."
         )
     )
 
     try:
-        response = await llm_with_tools.ainvoke(
-            [system_message] + state["messages"],
+        decision = await router_llm.ainvoke(
+            [router_prompt] + state["messages"],
             config=config,
         )
+        next_step = decision.next_step
+        print(f"[supervisor] Routing -> {next_step} (Reason: {decision.reasoning})", flush=True)
+    except Exception as e:
+        print(f"[supervisor] Router fallback: {e}", flush=True)
+        next_step = "FINISH"
 
-    except Exception:
-        try:
-            response = await llm.ainvoke(
-                [system_message] + state["messages"],
-                config=config,
+    if next_step == "FINISH":
+        synthesis_prompt = SystemMessage(
+            content=(
+                f"{SUPERVISOR_SYSTEM_PROMPT}\n\n"
+                "Provide a comprehensive, direct, and well-structured response to the user based on the conversation."
             )
+        )
+        response = await llm.ainvoke([synthesis_prompt] + state["messages"], config=config)
+        return {"messages": [response], "next_step": "FINISH"}
 
-        except Exception:
-            return {
-                "messages": [
-                    AIMessage(
-                        content=(
-                            "The configured model rejected the tool-calling "
-                            "schema for this request."
-                        )
-                    )
-                ]
-            }
-
-    return {"messages": [response]}
+    return {"next_step": next_step}
 
 
-builder = StateGraph(AgentState)
+async def docs_specialist_node(state: TeamState, config: RunnableConfig = None) -> dict:
+    llm = _get_base_llm()
+    if llm is None:
+        return {"messages": [AIMessage(content="LLM API key missing.")], "next_step": "FINISH"}
 
-builder.add_node("agent", agent)
+    visited = list(state.get("visited_specialists") or [])
+    if "docs_specialist" not in visited:
+        visited.append("docs_specialist")
 
-tool_node = ToolNode(tools)
+    # Check for existing tool results in the conversation
+    tool_messages = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+
+    # If tools have executed, synthesize the findings without further tool calls
+    if tool_messages:
+        user_query = ""
+        retrieved_contexts = []
+        for m in state["messages"]:
+            if isinstance(m, HumanMessage):
+                user_query = m.content
+            elif isinstance(m, ToolMessage):
+                retrieved_contexts.append(str(m.content))
+
+        context_str = "\n\n".join(retrieved_contexts)
+        synthesis_prompt = SystemMessage(
+            content=(
+                "You are the Senior Architecture & Documentation Specialist.\n"
+                "Below is the information retrieved from documentation tools:\n"
+                "--------------------\n"
+                f"{context_str}\n"
+                "--------------------\n"
+                "Provide a comprehensive, professional, and well-structured engineering response answering the user question based strictly on the retrieved documentation.\n"
+                "Cite sources properly (e.g. [SOURCE: docs/...]). Write in clean markdown text. Do not make any tool calls."
+            )
+        )
+        response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
+        return {
+            "messages": [response],
+            "visited_specialists": visited,
+        }
+
+    # Initial turn: bind tools to let specialist query documentation
+    docs_llm = llm.bind_tools(DOCS_TOOLS)
+    system_msg = SystemMessage(
+        content=(
+            f"{DOCS_SPECIALIST_PROMPT}\n\n"
+            "Select the most appropriate tool to search or read documentation for the user query."
+        )
+    )
+
+    response = await docs_llm.ainvoke([system_msg] + state["messages"], config=config)
+
+    return {
+        "messages": [response],
+        "visited_specialists": visited,
+    }
 
 
-async def logged_tool_node(state, config: RunnableConfig = None):
-    print("[graph] ToolNode execution started", flush=True)
-    result = await tool_node.ainvoke(state, config=config)
-    print("[graph] ToolNode execution returned", flush=True)
-    return result
+async def github_specialist_node(state: TeamState, config: RunnableConfig = None) -> dict:
+    llm = _get_base_llm()
+    if llm is None:
+        return {"messages": [AIMessage(content="LLM API key missing.")], "next_step": "FINISH"}
+
+    visited = list(state.get("visited_specialists") or [])
+    if "github_specialist" not in visited:
+        visited.append("github_specialist")
+
+    tool_messages = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+
+    # If tool executed, synthesize response (especially on errors like 404 or after data retrieval)
+    if tool_messages:
+        user_query = ""
+        retrieved_contexts = []
+        for m in state["messages"]:
+            if isinstance(m, HumanMessage):
+                user_query = m.content
+            elif isinstance(m, ToolMessage):
+                retrieved_contexts.append(str(m.content))
+
+        context_str = "\n\n".join(retrieved_contexts)
+        synthesis_prompt = SystemMessage(
+            content=(
+                "You are the Senior GitHub & Codebase Specialist.\n"
+                "Below is the data retrieved from GitHub tools:\n"
+                "--------------------\n"
+                f"{context_str}\n"
+                "--------------------\n"
+                "Synthesize the findings into a clear, precise, and actionable engineering response for the user.\n"
+                "If a repository or file was not found (404) or an error occurred, explain the issue clearly without retrying.\n"
+                "Write in clean markdown text. Do not make any tool calls."
+            )
+        )
+        response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
+        return {
+            "messages": [response],
+            "visited_specialists": visited,
+        }
+
+    # Initial turn: bind tools to query GitHub
+    github_llm = llm.bind_tools(GITHUB_TOOLS)
+    system_msg = SystemMessage(
+        content=(
+            f"{GITHUB_SPECIALIST_PROMPT}\n\n"
+            "Select the most appropriate tool to inspect the repository or code for the user query."
+        )
+    )
+
+    response = await github_llm.ainvoke([system_msg] + state["messages"], config=config)
+
+    return {
+        "messages": [response],
+        "visited_specialists": visited,
+    }
 
 
-builder.add_node("tools", logged_tool_node)
+# --- Routing Conditions ---
 
-builder.add_edge(START, "agent")
+def route_supervisor(state: TeamState) -> Literal["docs_specialist", "github_specialist", "__end__"]:
+    next_step = state.get("next_step", "FINISH")
+    if next_step == "docs_specialist":
+        return "docs_specialist"
+    elif next_step == "github_specialist":
+        return "github_specialist"
+    return "__end__"
+
+
+def route_docs_specialist(state: TeamState) -> Literal["docs_tools", "supervisor"]:
+    last_message = state["messages"][-1] if state["messages"] else None
+    if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        # Enforce maximum tool call limit to prevent loops
+        tool_count = len([m for m in state["messages"] if isinstance(m, ToolMessage)])
+        if tool_count < 2:
+            return "docs_tools"
+    return "supervisor"
+
+
+def route_github_specialist(state: TeamState) -> Literal["github_tools", "supervisor"]:
+    last_message = state["messages"][-1] if state["messages"] else None
+    if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        # Enforce maximum tool call limit to prevent loops
+        tool_count = len([m for m in state["messages"] if isinstance(m, ToolMessage)])
+        if tool_count < 2:
+            return "github_tools"
+    return "supervisor"
+
+
+# --- Graph Assembly ---
+
+builder = StateGraph(TeamState)
+
+# Nodes
+builder.add_node("supervisor", supervisor_node)
+builder.add_node("docs_specialist", docs_specialist_node)
+builder.add_node("docs_tools", ToolNode(DOCS_TOOLS))
+builder.add_node("github_specialist", github_specialist_node)
+builder.add_node("github_tools", ToolNode(GITHUB_TOOLS))
+
+# Edges
+builder.add_edge(START, "supervisor")
 
 builder.add_conditional_edges(
-    "agent",
-    tools_condition,
+    "supervisor",
+    route_supervisor,
+    {
+        "docs_specialist": "docs_specialist",
+        "github_specialist": "github_specialist",
+        "__end__": END,
+    },
 )
 
-builder.add_edge("tools", "agent")
+builder.add_conditional_edges(
+    "docs_specialist",
+    route_docs_specialist,
+    {
+        "docs_tools": "docs_tools",
+        "supervisor": "supervisor",
+    },
+)
+builder.add_edge("docs_tools", "docs_specialist")
+
+builder.add_conditional_edges(
+    "github_specialist",
+    route_github_specialist,
+    {
+        "github_tools": "github_tools",
+        "supervisor": "supervisor",
+    },
+)
+builder.add_edge("github_tools", "github_specialist")
 
 checkpointer = InMemorySaver()
 graph = builder.compile(checkpointer=checkpointer)

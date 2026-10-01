@@ -1,0 +1,29 @@
+# LLM / LangChain / LangGraph
+langchain-core
+langchain-openai
+langgraph
+
+# MCP
+mcp
+
+# LLM provider
+groq
+
+# RAG
+sentence-transformers
+faiss-cpu
+rank-bm25
+
+# Reranking
+# CrossEncoder is provided by sentence-transformers
+
+# GitHub
+PyGithub
+
+# API
+fastapi
+uvicorn[standard]
+pydantic
+
+# Environment variables
+python-dotenv

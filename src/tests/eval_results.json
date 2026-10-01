@@ -1,0 +1,254 @@
+[
+  {
+    "id": "direct_01_greeting",
+    "category": "direct_conversational",
+    "query": "Hello! What can you help me with?",
+    "expected_route": "FINISH",
+    "actual_route": "FINISH",
+    "route_matched": true,
+    "tools_called": [],
+    "tool_count": 0,
+    "zero_loop_pass": true,
+    "citation_pass": true,
+    "content_clean": true,
+    "overall_pass": true,
+    "latency_sec": 2.54,
+    "total_steps": 1,
+    "step_trace": [
+      "supervisor"
+    ],
+    "answer_preview": "Hi there! I\u2019m your Lead Engineering Orchestrator. I can help you with:  - **System architecture & design** \u2013 explain why",
+    "failure_reasons": []
+  },
+  {
+    "id": "direct_02_capabilities",
+    "category": "direct_conversational",
+    "query": "Explain your capabilities as the engineering orchestrator and what specialist agents you coordinate.",
+    "expected_route": "FINISH",
+    "actual_route": "FINISH",
+    "route_matched": true,
+    "tools_called": [],
+    "tool_count": 0,
+    "zero_loop_pass": true,
+    "citation_pass": true,
+    "content_clean": true,
+    "overall_pass": true,
+    "latency_sec": 2.88,
+    "total_steps": 1,
+    "step_trace": [
+      "supervisor"
+    ],
+    "answer_preview": "I\u2019m the **Lead Engineering Orchestrator**\u2014the central hub that coordinates the work of two specialized agents to answer ",
+    "failure_reasons": []
+  },
+  {
+    "id": "direct_03_simple_math",
+    "category": "direct_conversational",
+    "query": "What is 15 * 8?",
+    "expected_route": "FINISH",
+    "actual_route": "FINISH",
+    "route_matched": true,
+    "tools_called": [],
+    "tool_count": 0,
+    "zero_loop_pass": true,
+    "citation_pass": true,
+    "content_clean": true,
+    "overall_pass": true,
+    "latency_sec": 1.11,
+    "total_steps": 1,
+    "step_trace": [
+      "supervisor"
+    ],
+    "answer_preview": "15\u202f\u00d7\u202f8\u202f=\u202f120.",
+    "failure_reasons": []
+  },
+  {
+    "id": "docs_01_adr_listing",
+    "category": "docs_architecture",
+    "query": "What architecture decision records (ADRs) exist in this project?",
+    "expected_route": "docs_specialist",
+    "actual_route": "docs_specialist",
+    "route_matched": true,
+    "tools_called": [
+      "list_decisions"
+    ],
+    "tool_count": 1,
+    "zero_loop_pass": true,
+    "citation_pass": true,
+    "content_clean": true,
+    "overall_pass": true,
+    "latency_sec": 2.78,
+    "total_steps": 5,
+    "step_trace": [
+      "supervisor",
+      "docs_specialist",
+      "docs_tools",
+      "docs_specialist",
+      "supervisor"
+    ],
+    "answer_preview": "## Architecture Decision Records (ADRs) in the Project  The project maintains a set of Architecture Decision Records (AD",
+    "failure_reasons": []
+  },
+  {
+    "id": "docs_02_security_requirements",
+    "category": "docs_architecture",
+    "query": "What are the security requirements and authentication mechanisms in this system?",
+    "expected_route": "docs_specialist",
+    "actual_route": "docs_specialist",
+    "route_matched": true,
+    "tools_called": [
+      "search_knowledge"
+    ],
+    "tool_count": 1,
+    "zero_loop_pass": true,
+    "citation_pass": true,
+    "content_clean": true,
+    "overall_pass": true,
+    "latency_sec": 24.59,
+    "total_steps": 5,
+    "step_trace": [
+      "supervisor",
+      "docs_specialist",
+      "docs_tools",
+      "docs_specialist",
+      "supervisor"
+    ],
+    "answer_preview": "## Security Requirements & Authentication Mechanisms  Below is a concise, production\u2011ready summary of the security contr",
+    "failure_reasons": []
+  },
+  {
+    "id": "docs_03_idempotency_adr",
+    "category": "docs_architecture",
+    "query": "Explain the three-tier idempotency strategy described in our ADRs.",
+    "expected_route": "docs_specialist",
+    "actual_route": "docs_specialist",
+    "route_matched": true,
+    "tools_called": [
+      "search_knowledge"
+    ],
+    "tool_count": 1,
+    "zero_loop_pass": true,
+    "citation_pass": true,
+    "content_clean": true,
+    "overall_pass": true,
+    "latency_sec": 3.23,
+    "total_steps": 5,
+    "step_trace": [
+      "supervisor",
+      "docs_specialist",
+      "docs_tools",
+      "docs_specialist",
+      "supervisor"
+    ],
+    "answer_preview": "## Three\u2011Tier Idempotency Strategy (ADR\u20110003)  The system protects against duplicate processing of the same finding thro",
+    "failure_reasons": []
+  },
+  {
+    "id": "docs_04_runbook_procedures",
+    "category": "docs_architecture",
+    "query": "What are the troubleshooting steps in our runbooks for incident handling?",
+    "expected_route": "docs_specialist",
+    "actual_route": "docs_specialist",
+    "route_matched": true,
+    "tools_called": [
+      "search_knowledge"
+    ],
+    "tool_count": 1,
+    "zero_loop_pass": true,
+    "citation_pass": true,
+    "content_clean": true,
+    "overall_pass": true,
+    "latency_sec": 13.84,
+    "total_steps": 5,
+    "step_trace": [
+      "supervisor",
+      "docs_specialist",
+      "docs_tools",
+      "docs_specialist",
+      "supervisor"
+    ],
+    "answer_preview": "## Troubleshooting Steps for Incident Handling   *(Based on the current AppSec Incident Lab runbooks)*  ---  ### 1. **In",
+    "failure_reasons": []
+  },
+  {
+    "id": "github_01_list_prs",
+    "category": "github_codebase",
+    "query": "List the open pull requests in repository Lomesh-AI/sand.",
+    "expected_route": "github_specialist",
+    "actual_route": "github_specialist",
+    "route_matched": true,
+    "tools_called": [
+      "list_github_prs"
+    ],
+    "tool_count": 1,
+    "zero_loop_pass": true,
+    "citation_pass": true,
+    "content_clean": true,
+    "overall_pass": true,
+    "latency_sec": 13.25,
+    "total_steps": 5,
+    "step_trace": [
+      "supervisor",
+      "github_specialist",
+      "github_tools",
+      "github_specialist",
+      "supervisor"
+    ],
+    "answer_preview": "I\u2019m sorry, but I couldn\u2019t locate the repository **`Lomesh-AI/sand`** on GitHub. The API returned a 404 \u201cNot Found\u201d error",
+    "failure_reasons": []
+  },
+  {
+    "id": "github_02_list_files",
+    "category": "github_codebase",
+    "query": "Show the files and directories in repository Lomesh-AI/sand.",
+    "expected_route": "github_specialist",
+    "actual_route": "github_specialist",
+    "route_matched": true,
+    "tools_called": [
+      "list_github_files"
+    ],
+    "tool_count": 1,
+    "zero_loop_pass": true,
+    "citation_pass": true,
+    "content_clean": true,
+    "overall_pass": true,
+    "latency_sec": 10.65,
+    "total_steps": 5,
+    "step_trace": [
+      "supervisor",
+      "github_specialist",
+      "github_tools",
+      "github_specialist",
+      "supervisor"
+    ],
+    "answer_preview": "I\u2019m sorry, but I couldn\u2019t retrieve the file list for the repository **Lomesh-AI/sand**. The GitHub tool returned an erro",
+    "failure_reasons": []
+  },
+  {
+    "id": "github_03_error_resilience",
+    "category": "github_codebase",
+    "query": "Check open pull requests in repository invalid-nonexistent-org-9999/dummy-repo-xyz.",
+    "expected_route": "github_specialist",
+    "actual_route": "github_specialist",
+    "route_matched": true,
+    "tools_called": [
+      "list_github_prs"
+    ],
+    "tool_count": 1,
+    "zero_loop_pass": true,
+    "citation_pass": true,
+    "content_clean": true,
+    "overall_pass": true,
+    "latency_sec": 5.88,
+    "total_steps": 5,
+    "step_trace": [
+      "supervisor",
+      "github_specialist",
+      "github_tools",
+      "github_specialist",
+      "supervisor"
+    ],
+    "answer_preview": "The requested repository **`invalid-nonexistent-org-9999/dummy-repo-xyz`** could not be located on GitHub.   The API ret",
+    "failure_reasons": []
+  }
+]

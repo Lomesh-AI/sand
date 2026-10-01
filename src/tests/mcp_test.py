@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -8,7 +9,7 @@ from mcp.client.stdio import stdio_client
 async def main():
 
     server_params = StdioServerParameters(
-        command="python",
+        command=sys.executable,
         args=["-m", "src.mcp_server"],
         env={"GITHUB_TOKEN": token} if (token := os.environ.get("GITHUB_TOKEN")) else {},
     )
@@ -18,9 +19,11 @@ async def main():
         async with ClientSession(read, write) as session:
 
             # Initialize MCP connection
-            await session.initialize()
+            print("Connecting to MCP server...", flush=True)
+            await asyncio.wait_for(session.initialize(), timeout=10)
 
             # Ask server what tools it provides
+            print("Requesting tool list...", flush=True)
             tools = await session.list_tools()
 
             print("\nAVAILABLE TOOLS:")
@@ -62,13 +65,23 @@ async def main():
             # print(result.content[0].text)
 
             # search github
-            result = await session.call_tool(
-                "search_github",
-                {"query": "authentication"},
-            )
+            print("Calling GitHub search...", flush=True)
 
-            print("\nGITHUB SEARCH:")
-            print(result.content[0].text)
+            try:
+                result = await session.call_tool(
+                    "search_github",
+                    {
+                        "owner": "Lomesh-AI",
+                        "repo": "sand",
+                        "query": "authentication",
+                    },
+                )
+
+                print("\nGITHUB SEARCH:")
+                print(result.content[0].text)
+
+            except Exception as e:
+                print("GITHUB SEARCH ERROR:", repr(e), flush=True)
 
 if __name__ == "__main__":
     asyncio.run(main())

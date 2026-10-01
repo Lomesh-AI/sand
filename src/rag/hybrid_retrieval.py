@@ -9,6 +9,9 @@ class HybridRetrieval:
         self.chunks = chunks
 
     def search(self, query_text, top_k=5, alpha=0.5):
+        top_k = min(top_k, len(self.chunks))
+        if top_k == 0:
+            return []
         
         query_embedding = self.embedder.embed_query(query_text)
         semantic_scores, semantic_indices = self.vector_store.search(query_embedding, top_k=top_k)

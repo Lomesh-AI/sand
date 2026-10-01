@@ -292,8 +292,16 @@
             let answerBody = null;
 
             function renderEvent(event) {
-                if (event.type === "tool_call") addActivity("🔍 Searching knowledge base...");
-                if (event.type === "tool_result") addActivity("📄 Retrieved documents...");
+                if (event.type === "status") {
+                    addActivity(event.content || "📋 Processing...");
+                }
+                if (event.type === "tool_call") {
+                    const label = event.agent === "github_specialist" ? "GitHub Specialist" : "Docs Specialist";
+                    addActivity(`🔍 ${label}: executing ${event.tool || "query"}...`);
+                }
+                if (event.type === "tool_result") {
+                    addActivity("📄 Data retrieved from tools...");
+                }
                 if (event.type === "answer") {
                     answerBody = answerBody || addMessage("assistant", "");
                     answerBody.innerHTML = markdown(event.content || "");

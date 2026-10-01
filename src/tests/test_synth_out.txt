@@ -1,0 +1,64 @@
+## Security Requirements & Authentication Mechanisms
+
+Below is a concise, yet comprehensive, overview of the security controls that govern the **AppSec Incident Lab** system. The information is derived from the current security hardening guide.
+
+| Category | Control | Implementation Details | Source |
+|----------|---------|------------------------|--------|
+| **Authentication** | JSON Web Tokens (JWT) | • HS256 signing algorithm (HMAC‑SHA‑256) using the `golang-jwt/jwt/v5` library.<br>• Tokens are short‑lived (default 1 h).<br>• Standard claims: `iss`, `sub`, `exp`, `tenant_id`, `scope`. | [SOURCE: docs/security.md] |
+| **Authorization** | Role‑Based Access Control (RBAC) | • Three principal roles: `admin`, `responder`, `viewer`.<br>• Role assignments are enforced at the API layer. | [SOURCE: docs/security.md] |
+| **Transport Security** | TLS 1.3 | • All external endpoints are required to use TLS 1.3. | [SOURCE: docs/security.md] |
+| **Data at Rest** | AES‑256‑GCM | • Sensitive fields (e.g., incident metadata, user secrets) are encrypted using AES‑256 in Galois/Counter Mode. | [SOURCE: docs/security.md] |
+
+---
+
+### 1. Authentication Mechanism
+
+The system relies on **JWTs** for stateless authentication:
+
+- **Algorithm**: HS256 (HMAC‑SHA‑256) – a symmetric key approach that is fast and widely supported.
+- **Token Lifetime**: 1 hour by default, reducing the window for token misuse.
+- **Claims**:  
+  - `iss` (issuer) – identifies the auth server.  
+  - `sub` (subject) – the user ID.  
+  - `exp` (expiration) – token expiry timestamp.  
+  - `tenant_id` – multi‑tenant context.  
+  - `scope` – permissions or role identifiers.
+
+The JWT is issued after successful credential verification (e.g., username/password, OAuth, or SSO) and is presented in the `Authorization: Bearer <token>` header for all protected API calls.
+
+---
+
+### 2. Authorization Model
+
+Once a JWT is validated, the system extracts the `scope` claim to enforce **RBAC**:
+
+| Role | Typical Permissions |
+|------|---------------------|
+| `admin` | Full CRUD on incidents, user management, system configuration. |
+| `responder` | Read/write on incidents, ability to add notes, assign tasks. |
+| `viewer` | Read‑only access to incident data. |
+
+The RBAC checks are performed at the API gateway and at the service layer to ensure consistent enforcement.
+
+---
+
+### 3. Transport & Data Protection
+
+- **TLS 1.3**: All inbound and outbound traffic must use TLS 1.3, ensuring forward secrecy and protection against downgrade attacks.
+- **Encryption at Rest**: Sensitive fields are stored encrypted with AES‑256‑GCM. The encryption keys are managed by a dedicated key‑management service (KMS) and are rotated regularly.
+
+---
+
+### 4. Summary of Security Requirements
+
+| Requirement | Description | Implementation |
+|-------------|-------------|----------------|
+| **Strong Authentication** | Stateless, short‑lived JWTs with secure signing. | HS256, 1 h expiry. |
+| **Fine‑grained Authorization** | Role‑based access control. | RBAC with `admin`, `responder`, `viewer`. |
+| **Transport Security** | Enforce TLS 1.3 on all endpoints. | TLS 1.3 mandatory. |
+| **Data Confidentiality** | Encrypt sensitive data at rest. | AES‑256‑GCM. |
+| **Auditability** | (Implicit) Claims include tenant and scope for audit trails. | JWT claims. |
+
+These controls collectively ensure that only authenticated users can access the system, that their actions are limited to their roles, that data in transit and at rest remain confidential, and that the system adheres to modern security best practices.
+
+---

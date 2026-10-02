@@ -327,6 +327,9 @@
                 <p class="subtitle">Search architecture decisions, runbooks, and engineering documentation.</p>
             </div>
             <div class="api-config">
+                <button class="api-btn" id="new-chat-btn" type="button" title="Start a fresh conversation session">
+                    <span>+ New Chat</span>
+                </button>
                 <button class="api-btn" id="api-config-btn" type="button" title="Configure Backend API URL">
                     <span class="status-dot" id="status-dot"></span>
                     <span id="api-status-text">Backend: Checking...</span>
@@ -373,6 +376,26 @@
     const saveBtn = document.getElementById("modal-save-btn");
     const statusDot = document.getElementById("status-dot");
     const apiStatusText = document.getElementById("api-status-text");
+    const newChatBtn = document.getElementById("new-chat-btn");
+
+    function getThreadId() {
+        let tid = sessionStorage.getItem("agent_thread_id");
+        if (!tid) {
+            tid = "session-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9);
+            sessionStorage.setItem("agent_thread_id", tid);
+        }
+        return tid;
+    }
+
+    if (newChatBtn) {
+        newChatBtn.addEventListener("click", () => {
+            const newTid = "session-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9);
+            sessionStorage.setItem("agent_thread_id", newTid);
+            conversation.innerHTML = '<div class="empty-state" id="empty-state">Ask a question about the engineering knowledge base.</div>';
+            input.value = "";
+            input.focus();
+        });
+    }
 
     function getApiBaseUrl() {
         const stored = localStorage.getItem("agent_api_base_url");
@@ -513,10 +536,11 @@
         input.disabled = true;
 
         try {
+            const threadId = getThreadId();
             const response = await fetch(`${baseUrl}/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message })
+                body: JSON.stringify({ message, thread_id: threadId })
             });
             if (!response.ok || !response.body) throw new Error("The agent backend could not be reached (Status " + response.status + ").");
 

@@ -45,6 +45,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from langchain_core.messages import HumanMessage
 from langchain_core.tracers.langchain import LangChainTracer
 
 from agent.tools import mcp_client
@@ -91,12 +92,13 @@ async def health():
 
 class ChatRequest(BaseModel):
     message: str
+    thread_id: str | None = None
 
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
 
-    thread_id = str(uuid.uuid4())
+    thread_id = request.thread_id or str(uuid.uuid4())
     print("Chat request received:", request.message)
     print("Chat thread_id:", thread_id)
     print("MCP session before request:", mcp_client.session)
@@ -128,10 +130,7 @@ async def chat(request: ChatRequest):
             async for event in graph.astream(
                 {
                     "messages": [
-                        {
-                            "role": "user",
-                            "content": request.message
-                        }
+                        HumanMessage(content=request.message)
                     ]
                 },
                 config=config,
@@ -223,6 +222,7 @@ async def chat(request: ChatRequest):
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
+            "X-Thread-ID": thread_id,
         },
     )
 

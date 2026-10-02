@@ -42,7 +42,7 @@ if os.environ.get("LANGSMITH_PROJECT") and not os.environ.get("LANGCHAIN_PROJECT
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
@@ -80,6 +80,11 @@ app.mount(
     StaticFiles(directory=str(static_dir), html=True),
     name="static"
 )
+
+
+@app.get("/")
+async def root():
+    return FileResponse(static_dir / "index.html")
 
 
 @app.get("/health")

@@ -83,6 +83,8 @@ class RouterDecision(BaseModel):
     )
 
 
+from langchain_core.tools import tool
+
 # --- Helper Functions ---
 
 def _get_current_turn_messages(messages: list) -> list:
@@ -91,6 +93,48 @@ def _get_current_turn_messages(messages: list) -> list:
     if not human_indices:
         return messages
     return messages[human_indices[-1]:]
+
+
+def _clean_dialog_history(messages: list) -> list:
+    """
+    Returns conversational message history for routing and synthesis:
+    Keeps HumanMessages, SystemMessages, and AIMessages that have user-facing text content.
+    Strips raw ToolMessages and intermediate AIMessages with tool_calls from prior turns
+    so external LLM APIs (like Groq) don't trigger 'Tool choice is none, but model called a tool'.
+    """
+    cleaned = []
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            cleaned.append(msg)
+        elif isinstance(msg, AIMessage):
+            if msg.content and isinstance(msg.content, str) and msg.content.strip():
+                cleaned.append(AIMessage(content=msg.content))
+        elif isinstance(msg, SystemMessage):
+            cleaned.append(msg)
+    return cleaned
+
+
+# --- Supervisor Delegation Tools ---
+
+@tool
+def github_specialist(reason: str = "") -> str:
+    """Delegate task to GitHub & Codebase Specialist for repository queries, files, PRs, issues, or codebase structure."""
+    return f"routed to github_specialist: {reason}"
+
+
+@tool
+def docs_specialist(reason: str = "") -> str:
+    """Delegate task to Documentation Specialist for architecture decisions (ADRs), runbooks, and docs."""
+    return f"routed to docs_specialist: {reason}"
+
+
+@tool
+def finish_conversation(reason: str = "") -> str:
+    """Finish the conversation and answer the user directly when no specialist tools are required."""
+    return f"finish: {reason}"
+
+
+ROUTING_TOOLS = [github_specialist, docs_specialist, finish_conversation]
 
 
 # --- Nodes ---
@@ -142,29 +186,50 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
         response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
         return {"messages": [response], "next_step": "FINISH", "visited_specialists": []}
 
-    # Formulate routing decision with awareness of conversation history
-    router_llm = llm.with_structured_output(RouterDecision)
+    # Clean dialog history for supervisor routing (avoids Groq tool_use conflicts)
+    dialog_history = _clean_dialog_history(state["messages"])
+    router_llm = llm.bind_tools(ROUTING_TOOLS)
     router_prompt = SystemMessage(
         content=(
             f"{SUPERVISOR_SYSTEM_PROMPT}\n\n"
             "Review the conversation history and the latest user request to make a routing decision.\n"
-            "Decide whether to delegate to 'docs_specialist', 'github_specialist', or 'FINISH'.\n"
-            "- If the query or follow-up is about architecture, decisions (ADRs), or docs -> 'docs_specialist'.\n"
-            "- If the query or follow-up refers to code, repositories, pull requests, issues, or 'the above repo' -> 'github_specialist'.\n"
-            "- If the query is a simple greeting or general question requiring no external tools -> 'FINISH'."
+            "Call one of the available delegation tools:\n"
+            "- Call 'github_specialist' if the query or follow-up refers to code, repositories, pull requests, issues, or 'the above repo'.\n"
+            "- Call 'docs_specialist' if the query or follow-up is about architecture, decisions (ADRs), or docs.\n"
+            "- Call 'finish_conversation' if the query is a simple greeting or general question requiring no external tools."
         )
     )
 
+    next_step = "FINISH"
     try:
-        decision = await router_llm.ainvoke(
-            [router_prompt] + state["messages"],
-            config=config,
-        )
-        next_step = decision.next_step
-        print(f"[supervisor] Routing -> {next_step} (Reason: {decision.reasoning})", flush=True)
+        decision_msg = await router_llm.ainvoke([router_prompt] + dialog_history, config=config)
+        tool_calls = getattr(decision_msg, "tool_calls", [])
+        if tool_calls:
+            call_name = tool_calls[0]["name"]
+            if call_name in ("github_specialist", "docs_specialist"):
+                next_step = call_name
+            elif call_name == "finish_conversation":
+                next_step = "FINISH"
+        elif decision_msg.content:
+            # Model answered directly
+            return {"messages": [decision_msg], "next_step": "FINISH", "visited_specialists": []}
     except Exception as e:
-        print(f"[supervisor] Router fallback: {e}", flush=True)
-        next_step = "FINISH"
+        err_str = str(e).lower()
+        print(f"[supervisor] Router error: {e}", flush=True)
+        if "github" in err_str:
+            next_step = "github_specialist"
+        elif "doc" in err_str:
+            next_step = "docs_specialist"
+        else:
+            user_msg = state["messages"][-1].content.lower() if state["messages"] else ""
+            if any(k in user_msg for k in ["file", "repo", "pr", "pull", "issue", "commit", "branch", "github"]):
+                next_step = "github_specialist"
+            elif any(k in user_msg for k in ["doc", "adr", "architecture", "decision", "runbook"]):
+                next_step = "docs_specialist"
+            else:
+                next_step = "FINISH"
+
+    print(f"[supervisor] Next step: {next_step}", flush=True)
 
     if next_step == "FINISH":
         synthesis_prompt = SystemMessage(
@@ -173,7 +238,7 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
                 "Provide a comprehensive, direct, and well-structured response to the user based on the conversation."
             )
         )
-        response = await llm.ainvoke([synthesis_prompt] + state["messages"], config=config)
+        response = await llm.ainvoke([synthesis_prompt] + dialog_history, config=config)
         return {"messages": [response], "next_step": "FINISH", "visited_specialists": []}
 
     return {"next_step": next_step, "visited_specialists": visited}
@@ -228,7 +293,8 @@ async def docs_specialist_node(state: TeamState, config: RunnableConfig = None) 
         )
     )
 
-    response = await docs_llm.ainvoke([system_msg] + state["messages"], config=config)
+    dialog_history = _clean_dialog_history(state["messages"])
+    response = await docs_llm.ainvoke([system_msg] + dialog_history, config=config)
 
     return {
         "messages": [response],
@@ -287,7 +353,8 @@ async def github_specialist_node(state: TeamState, config: RunnableConfig = None
         )
     )
 
-    response = await github_llm.ainvoke([system_msg] + state["messages"], config=config)
+    dialog_history = _clean_dialog_history(state["messages"])
+    response = await github_llm.ainvoke([system_msg] + dialog_history, config=config)
 
     return {
         "messages": [response],

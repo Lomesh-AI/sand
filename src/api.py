@@ -212,7 +212,12 @@ async def chat(request: ChatRequest):
                         }) + "\n"
         except Exception as exc:
             print("Event generator exception:", thread_id, repr(exc))
-            raise
+            import traceback
+            traceback.print_exc()
+            yield json.dumps({
+                "type": "answer",
+                "content": f"⚠️ An error occurred while processing your query: {type(exc).__name__}: {exc}"
+            }) + "\n"
         finally:
             print("Event generator ended:", thread_id)
             print("MCP session after request:", mcp_client.session)

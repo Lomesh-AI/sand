@@ -7,10 +7,11 @@ from mcp.server.mcpserver import MCPServer
 import os
 from github import Github, GithubException
 
-github_client = Github(os.environ.get("GITHUB_TOKEN"))
+github_token = os.environ.get("GITHUB_TOKEN")
+github_client = Github(github_token if github_token else None)
 print(
     "MCP GITHUB_TOKEN:",
-    bool(os.environ.get("GITHUB_TOKEN")),
+    bool(github_token),
     file=sys.stderr,
     flush=True
 )
@@ -201,49 +202,58 @@ def list_github_files(owner: str, repo: str) -> str:
     """
     List files in the root of a GitHub repository.
     """
-    repository = github_client.get_repo(f"{owner}/{repo}")
+    try:
+        repository = github_client.get_repo(f"{owner}/{repo}")
+        contents = repository.get_contents("")
 
-    contents = repository.get_contents("")
+        files = []
+        for item in contents:
+            files.append(
+                f"[TYPE: {item.type}]\n"
+                f"[PATH: {item.path}]\n"
+                f"[URL: {item.html_url or 'N/A'}]"
+            )
 
-    files = []
+        if not files:
+            return "No files found."
 
-    for item in contents:
-        files.append(
-            f"[TYPE: {item.type}]\n"
-            f"[PATH: {item.path}]\n"
-            f"[URL: {item.html_url}]"
-        )
-
-    if not files:
-        return "No files found."
-
-    return "\n\n".join(files)
+        return "\n\n".join(files)
+    except GithubException as exc:
+        status = getattr(exc, "status", "unknown")
+        message = exc.data.get("message", str(exc)) if hasattr(exc, "data") else str(exc)
+        return f"GitHub error listing files for {owner}/{repo}: {status} {message}"
+    except Exception as exc:
+        return f"Failed to list files for {owner}/{repo}: {type(exc).__name__}: {exc}"
 
 @server.tool()
 def list_github_issues(owner: str, repo: str) -> str:
     """
     List open issues in a GitHub repository.
     """
-    repository = github_client.get_repo(f"{owner}/{repo}")
+    try:
+        repository = github_client.get_repo(f"{owner}/{repo}")
+        issues = repository.get_issues(state="open")
 
-    issues = repository.get_issues(state="open")
+        results = []
+        for i, issue in enumerate(issues):
+            if i >= 10:
+                break
+            results.append(
+                f"[ISSUE #{issue.number}]\n"
+                f"[TITLE: {issue.title}]\n"
+                f"[URL: {issue.html_url}]"
+            )
 
-    results = []
+        if not results:
+            return "No open issues found."
 
-    for i, issue in enumerate(issues):
-        if i >= 10:
-            break
-
-        results.append(
-            f"[ISSUE #{issue.number}]\n"
-            f"[TITLE: {issue.title}]\n"
-            f"[URL: {issue.html_url}]"
-        )
-
-    if not results:
-        return "No open issues found."
-
-    return "\n\n".join(results)
+        return "\n\n".join(results)
+    except GithubException as exc:
+        status = getattr(exc, "status", "unknown")
+        message = exc.data.get("message", str(exc)) if hasattr(exc, "data") else str(exc)
+        return f"GitHub error listing issues for {owner}/{repo}: {status} {message}"
+    except Exception as exc:
+        return f"Failed to list issues for {owner}/{repo}: {type(exc).__name__}: {exc}"
 
 # @server.tool()
 # def list_github_prs(owner: str, repo: str) -> str:

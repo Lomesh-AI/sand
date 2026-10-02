@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: engineering-knowledge-agent
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python src/api.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: XAI_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: LANGSMITH_API_KEY
+        sync: false
+      - key: LANGSMITH_TRACING
+        value: "true"

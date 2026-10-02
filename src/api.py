@@ -41,6 +41,7 @@ if os.environ.get("LANGSMITH_PROJECT") and not os.environ.get("LANGCHAIN_PROJECT
     os.environ["LANGCHAIN_PROJECT"] = os.environ["LANGSMITH_PROJECT"]
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -63,6 +64,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Engineering Knowledge Agent", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 static_dir = Path(__file__).resolve().parent / "static"
 
 app.mount(
@@ -70,6 +79,14 @@ app.mount(
     StaticFiles(directory=str(static_dir), html=True),
     name="static"
 )
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "mcp_connected": mcp_client.session is not None,
+    }
 
 
 class ChatRequest(BaseModel):
@@ -212,4 +229,5 @@ async def chat(request: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

@@ -83,6 +83,16 @@ class RouterDecision(BaseModel):
     )
 
 
+# --- Helper Functions ---
+
+def _get_current_turn_messages(messages: list) -> list:
+    """Return only the messages belonging to the current user turn."""
+    human_indices = [i for i, m in enumerate(messages) if isinstance(m, HumanMessage)]
+    if not human_indices:
+        return messages
+    return messages[human_indices[-1]:]
+
+
 # --- Nodes ---
 
 async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> dict:
@@ -95,19 +105,21 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
             "next_step": "FINISH",
         }
 
-    visited = list(state.get("visited_specialists") or [])
+    last_msg = state["messages"][-1] if state["messages"] else None
+    is_user_turn_start = isinstance(last_msg, HumanMessage)
+    visited = [] if is_user_turn_start else list(state.get("visited_specialists") or [])
 
-    # If a specialist has already completed investigation, synthesize the final response immediately
-    if visited:
-        # If a single specialist already produced a complete text response, adopt it directly
-        last_msg = state["messages"][-1] if state["messages"] else None
+    # If returning from a specialist investigation in this turn, synthesize the final response
+    if visited and not is_user_turn_start:
+        # If specialist already produced a complete text response without tool calls, adopt it directly
         if isinstance(last_msg, AIMessage) and last_msg.content and not getattr(last_msg, "tool_calls", None):
-            return {"messages": [last_msg], "next_step": "FINISH"}
+            return {"messages": [last_msg], "next_step": "FINISH", "visited_specialists": []}
 
-        # Otherwise synthesize across specialist findings using clean text context
+        # Otherwise synthesize across current turn's specialist findings
+        turn_messages = _get_current_turn_messages(state["messages"])
         findings = []
         user_query = ""
-        for m in state["messages"]:
+        for m in turn_messages:
             if isinstance(m, HumanMessage):
                 user_query = m.content
             elif isinstance(m, AIMessage) and m.content and not getattr(m, "tool_calls", None):
@@ -119,7 +131,7 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
         synthesis_prompt = SystemMessage(
             content=(
                 "You are the Lead Engineering Orchestrator.\n"
-                "The specialist investigation is complete. Below are the findings collected:\n"
+                "The specialist investigation for the current query is complete. Below are the findings collected:\n"
                 "--------------------\n"
                 f"{context_str}\n"
                 "--------------------\n"
@@ -128,16 +140,17 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
             )
         )
         response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
-        return {"messages": [response], "next_step": "FINISH"}
+        return {"messages": [response], "next_step": "FINISH", "visited_specialists": []}
 
-    # Formulate initial routing decision
+    # Formulate routing decision with awareness of conversation history
     router_llm = llm.with_structured_output(RouterDecision)
     router_prompt = SystemMessage(
         content=(
             f"{SUPERVISOR_SYSTEM_PROMPT}\n\n"
+            "Review the conversation history and the latest user request to make a routing decision.\n"
             "Decide whether to delegate to 'docs_specialist', 'github_specialist', or 'FINISH'.\n"
-            "- If the query is about architecture, decisions (ADRs), or docs -> 'docs_specialist'.\n"
-            "- If the query is about repositories, code, pull requests, or issues -> 'github_specialist'.\n"
+            "- If the query or follow-up is about architecture, decisions (ADRs), or docs -> 'docs_specialist'.\n"
+            "- If the query or follow-up refers to code, repositories, pull requests, issues, or 'the above repo' -> 'github_specialist'.\n"
             "- If the query is a simple greeting or general question requiring no external tools -> 'FINISH'."
         )
     )
@@ -161,9 +174,9 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
             )
         )
         response = await llm.ainvoke([synthesis_prompt] + state["messages"], config=config)
-        return {"messages": [response], "next_step": "FINISH"}
+        return {"messages": [response], "next_step": "FINISH", "visited_specialists": []}
 
-    return {"next_step": next_step}
+    return {"next_step": next_step, "visited_specialists": visited}
 
 
 async def docs_specialist_node(state: TeamState, config: RunnableConfig = None) -> dict:
@@ -175,14 +188,14 @@ async def docs_specialist_node(state: TeamState, config: RunnableConfig = None) 
     if "docs_specialist" not in visited:
         visited.append("docs_specialist")
 
-    # Check for existing tool results in the conversation
-    tool_messages = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+    turn_messages = _get_current_turn_messages(state["messages"])
+    tool_messages = [m for m in turn_messages if isinstance(m, ToolMessage)]
 
-    # If tools have executed, synthesize the findings without further tool calls
+    # If tools have executed in this turn, synthesize the findings without further tool calls
     if tool_messages:
         user_query = ""
         retrieved_contexts = []
-        for m in state["messages"]:
+        for m in turn_messages:
             if isinstance(m, HumanMessage):
                 user_query = m.content
             elif isinstance(m, ToolMessage):
@@ -232,13 +245,14 @@ async def github_specialist_node(state: TeamState, config: RunnableConfig = None
     if "github_specialist" not in visited:
         visited.append("github_specialist")
 
-    tool_messages = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+    turn_messages = _get_current_turn_messages(state["messages"])
+    tool_messages = [m for m in turn_messages if isinstance(m, ToolMessage)]
 
-    # If tool executed, synthesize response (especially on errors like 404 or after data retrieval)
+    # If tool executed in this turn, synthesize response
     if tool_messages:
         user_query = ""
         retrieved_contexts = []
-        for m in state["messages"]:
+        for m in turn_messages:
             if isinstance(m, HumanMessage):
                 user_query = m.content
             elif isinstance(m, ToolMessage):
@@ -268,7 +282,8 @@ async def github_specialist_node(state: TeamState, config: RunnableConfig = None
     system_msg = SystemMessage(
         content=(
             f"{GITHUB_SPECIALIST_PROMPT}\n\n"
-            "Select the most appropriate tool to inspect the repository or code for the user query."
+            "Select the most appropriate tool to inspect the repository or code for the user query.\n"
+            "If the user refers to an earlier repository or context from the conversation history (e.g. 'the above repo'), resolve the repository owner and name from the prior messages."
         )
     )
 
@@ -294,8 +309,9 @@ def route_supervisor(state: TeamState) -> Literal["docs_specialist", "github_spe
 def route_docs_specialist(state: TeamState) -> Literal["docs_tools", "supervisor"]:
     last_message = state["messages"][-1] if state["messages"] else None
     if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        # Enforce maximum tool call limit to prevent loops
-        tool_count = len([m for m in state["messages"] if isinstance(m, ToolMessage)])
+        # Enforce maximum tool call limit for the current turn to prevent loops
+        turn_messages = _get_current_turn_messages(state["messages"])
+        tool_count = len([m for m in turn_messages if isinstance(m, ToolMessage)])
         if tool_count < 2:
             return "docs_tools"
     return "supervisor"
@@ -304,8 +320,9 @@ def route_docs_specialist(state: TeamState) -> Literal["docs_tools", "supervisor
 def route_github_specialist(state: TeamState) -> Literal["github_tools", "supervisor"]:
     last_message = state["messages"][-1] if state["messages"] else None
     if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        # Enforce maximum tool call limit to prevent loops
-        tool_count = len([m for m in state["messages"] if isinstance(m, ToolMessage)])
+        # Enforce maximum tool call limit for the current turn to prevent loops
+        turn_messages = _get_current_turn_messages(state["messages"])
+        tool_count = len([m for m in turn_messages if isinstance(m, ToolMessage)])
         if tool_count < 2:
             return "github_tools"
     return "supervisor"

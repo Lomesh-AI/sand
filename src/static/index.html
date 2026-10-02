@@ -398,6 +398,10 @@
     }
 
     function getApiBaseUrl() {
+        // When hosted together on AWS / Cloudflare Tunnel, always use same-origin
+        if (!window.location.hostname.includes("github.io")) {
+            return "";
+        }
         const stored = localStorage.getItem("agent_api_base_url");
         if (stored && stored.trim() !== "") {
             return stored.trim().replace(/\/+$/, "");
@@ -425,13 +429,13 @@
 
             if (res.ok) {
                 statusDot.className = "status-dot online";
-                apiStatusText.textContent = baseUrl ? "Backend: Connected (Cloud)" : "Backend: Connected (Local)";
+                apiStatusText.textContent = "Backend: Connected";
             } else {
                 throw new Error("HTTP " + res.status);
             }
         } catch (e) {
             statusDot.className = "status-dot offline";
-            apiStatusText.textContent = baseUrl ? "Backend: Sleeping / Offline" : "Backend: Offline";
+            apiStatusText.textContent = "Backend: Offline / Wake up";
         }
     }
 

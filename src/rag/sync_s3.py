@@ -37,6 +37,11 @@ def check_status(s3: S3RAGStorage, cache_dir: Path):
     print(f"Prefix:       {s3.prefix}")
     print(f"AWS Region:   {s3.region}")
     print(f"S3 Enabled:   {'YES' if s3.is_enabled else 'NO'}")
+    access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY") or os.environ.get("AWS_SECRET_KEY")
+    print("AWS Credentials:")
+    print(f"  AWS_ACCESS_KEY_ID:     {'SET (' + access_key[:4] + '...)' if access_key else 'NOT SET (will attempt IAM instance role)'}")
+    print(f"  AWS_SECRET_ACCESS_KEY: {'SET' if secret_key else 'NOT SET'}")
     print("-" * 60)
 
     # Local Files

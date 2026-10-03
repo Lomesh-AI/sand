@@ -5,7 +5,7 @@ from typing import Optional
 
 try:
     import boto3
-    from botocore.exceptions import ClientError, NoCredentialsError
+    from botocore.exceptions import ClientError, NoCredentialsError, PartialCredentialsError
     BOTO3_AVAILABLE = True
 except ImportError:
     BOTO3_AVAILABLE = False
@@ -48,11 +48,28 @@ class S3RAGStorage:
         return bool(BOTO3_AVAILABLE and self.bucket_name)
 
     def get_client(self):
-        """Lazily initialize boto3 S3 client using IAM role or standard credentials."""
+        """Lazily initialize boto3 S3 client using IAM role or explicit credentials."""
         if not self.is_enabled:
             return None
         if self._s3_client is None:
-            self._s3_client = boto3.client("s3", region_name=self.region)
+            access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+            secret_key = (
+                os.environ.get("AWS_SECRET_ACCESS_KEY")
+                or os.environ.get("AWS_SECRET_KEY")
+            )
+            session_token = (
+                os.environ.get("AWS_SESSION_TOKEN")
+                or os.environ.get("AWS_SECURITY_TOKEN")
+            )
+
+            kwargs = {"region_name": self.region}
+            if access_key and secret_key:
+                kwargs["aws_access_key_id"] = access_key.strip()
+                kwargs["aws_secret_access_key"] = secret_key.strip()
+                if session_token:
+                    kwargs["aws_session_token"] = session_token.strip()
+
+            self._s3_client = boto3.client("s3", **kwargs)
         return self._s3_client
 
     def download_assets(self, target_dir: Path) -> bool:
@@ -85,8 +102,8 @@ class S3RAGStorage:
             except ClientError as exc:
                 code = exc.response.get("Error", {}).get("Code", "Unknown")
                 print(f"[S3RAGStorage] S3 download skipped for {s3_key} (Error {code})", file=sys.stderr, flush=True)
-            except NoCredentialsError:
-                print("[S3RAGStorage] AWS credentials not found. Falling back to local RAG assets.", file=sys.stderr, flush=True)
+            except (NoCredentialsError, PartialCredentialsError) as exc:
+                print(f"[S3RAGStorage] AWS credentials issue ({exc}). Please check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env.", file=sys.stderr, flush=True)
                 return False
             except Exception as exc:
                 print(f"[S3RAGStorage] Failed to download {s3_key}: {exc}", file=sys.stderr, flush=True)
@@ -122,6 +139,9 @@ class S3RAGStorage:
                 client.upload_file(str(local_path), self.bucket_name, s3_key)
                 print(f"[S3RAGStorage] Successfully uploaded {filename} to S3.", flush=True)
                 success_count += 1
+            except (NoCredentialsError, PartialCredentialsError) as exc:
+                print(f"[S3RAGStorage] AWS credentials issue ({exc}). Please check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env.", file=sys.stderr, flush=True)
+                return False
             except Exception as exc:
                 print(f"[S3RAGStorage] Failed to upload {filename} to S3: {exc}", file=sys.stderr, flush=True)
 

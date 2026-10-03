@@ -1,0 +1,26 @@
+### YamlMime:Architecture
+metadata:
+  title: SAP Deployment in Azure by Using an Oracle Database
+  description: Learn how to deploy SAP NetWeaver with Oracle Database on Azure in a high-availability (HA) architecture by using availability zones and Data Guard.
+  author: msftrobiro
+  ms.author: robiro
+  ms.date: 05/07/2026
+  ms.topic: example-scenario
+  ms.subservice: example-scenario
+  ms.category:
+    - databases
+  ms.custom:
+    - linux-related-content
+name: SAP deployment on Azure by using an Oracle database
+azureCategories:
+  - databases
+summary: Learn how to deploy SAP NetWeaver with Oracle Database on Azure in a high-availability (HA) architecture by using availability zones and Data Guard.
+products:
+  - azure-expressroute
+  - azure-sap
+  - azure-virtual-machines
+  - azure-virtual-network
+  - azure-netapp-files
+thumbnailUrl: /azure/architecture/browse/thumbs/sap-oracle-architecture.png
+content: |
+   [!INCLUDE[](sap-production-content.md)]

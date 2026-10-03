@@ -1,0 +1,25 @@
+### YamlMime:Architecture
+metadata:
+  title: Use the Many-Models Approach to Scale Machine Learning Models
+  description: Learn how to manage and deploy a many-models architecture by using Azure Machine Learning and compute clusters to scale machine learning models.
+  author: ulisesadan
+  ms.author: seadan
+  ms.date: 01/28/2025
+  ms.topic: example-scenario
+  ms.collection: ce-skilling-ai-copilot
+  ms.subservice: example-scenario
+  ms.custom: arb-aiml
+azureCategories:
+  - ai-machine-learning
+  - analytics
+products:
+  - azure-data-factory
+  - azure-data-lake
+  - azure-databricks
+  - azure-machine-learning
+  - azure-synapse-analytics
+name: Use the many-models architecture approach to scale machine learning models
+summary: Learn how to manage and deploy a many-models architecture by using Azure Machine Learning and compute clusters to scale machine learning models.
+thumbnailUrl: /azure/architecture/browse/thumbs/many-models-machine-learning-azure-thumbnail.png
+content: |
+  [!INCLUDE[](many-models-machine-learning-azure-machine-learning-content.md)]

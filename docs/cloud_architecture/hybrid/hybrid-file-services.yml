@@ -1,0 +1,29 @@
+### YamlMime:Architecture
+metadata:
+  title: Hybrid file services
+  description: Use Azure File Sync and Azure Files to extend file services hosting capabilities across cloud and on-premises file share resources.
+  author: claytonsiemens77
+  ms.author: pnp
+  ms.date: 06/05/2026
+  ms.topic: reference-architecture
+  ms.subservice: reference-architecture
+  ai-usage: ai-assisted
+  ms.category:
+    - hybrid
+    - storage
+  ms.custom:
+    - e2e-hybrid
+    - arb-hybrid
+name: Hybrid file services
+azureCategories:
+  - hybrid
+  - storage
+summary: Use Azure File Sync and Azure Files to extend file services hosting capabilities across cloud and on-premises file share resources.
+products:
+  - entra-id
+  - azure-expressroute
+  - azure-files
+  - azure-storage-accounts
+thumbnailUrl: /azure/architecture/browse/thumbs/hybrid-file-services.png
+content: |
+   [!include[](hybrid-file-services-content.md)]

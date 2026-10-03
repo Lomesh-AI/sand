@@ -1,0 +1,13 @@
+{
+    "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint/v0.38.0/schema/markdownlint-config-schema-strict.json",
+    "default": true,
+    "MD013": false,
+    "MD025": {
+        "front_matter_title": ""
+    },
+    "MD026": {
+        "punctuation": ".,;:!"
+    },
+    "MD033": false,
+    "MD041": false
+}

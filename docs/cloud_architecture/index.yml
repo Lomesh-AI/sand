@@ -1,0 +1,219 @@
+### YamlMime:ProductSubHub
+metadata:
+  title: Azure Architecture Center
+  description: The Azure Architecture Center provides guidance for designing and building solutions on Azure by using established patterns and practices.
+  ms.topic: hub-page
+  ms.date: 06/04/2026
+  ms.collection: collection
+  ms.author: pnp
+  author: claytonsiemens77
+  google-site-verification: b-xRLveOzJ9oSOh37wgRTRB2lMOoFY8HiHf9_0DIawE
+
+title: Azure Architecture Center
+brand: azure
+
+# Ref: https://learn.microsoft.com/static/ui/latest/schemas/ProductSubHub.schema.json
+# Single-TOC variant (tocType: single) - a task-oriented "what should I do?" L2
+# wayfinding page. Single-TOC sub-hubs require coreWorkflows and must not use the
+# multi-TOC-only allProductAreas section.
+# NOTE: Items marked "PLACEHOLDER" use sample copy to exercise optional template
+# sections that have no owned content today. They reveal where content backfill
+# is needed.
+#
+# ICONS: getStarted/coreWorkflows/supportReference use iconImage {src}. They
+# currently point at the known-good /media/common/i_*.svg assets so the preview
+# renders. The shared hub icon set below is the intended target, but those paths
+# are not live yet (they resolve to 404 and carry a ?branch=main query), so don't
+# wire them in until they publish. Suggested swap once live:
+#   architecture-yellow.svg           -> architecture/browse cards
+#   documentation-purple.svg          -> fundamentals/documentation cards
+#   assessment-checkmark-gradient.svg -> decision-guide / technology-choice cards
+#   credentials-magenta.svg           -> security / frameworks cards
+#   code-sample-square-magenta.svg    -> pattern / implementation cards
+#   training-orange.svg, q-and-a-orange.svg, labs-card-blue.svg -> learning cards
+# Base path: /media/hubs/shared/<name>.svg (drop the ?branch=main query).
+# The learnFormats section already uses the schema icon enum (documentation,
+# training, qna, assessments), which the template resolves to these shared SVGs
+# internally once they are live - no manual src needed there.
+
+tocType: single
+
+# ------------------------------------------------------------------------------
+# Section 1: Product overview (required) - text only, no cards/links/imagery
+# ------------------------------------------------------------------------------
+productOverview:
+  title: Azure Architecture Center
+  summary: Design solutions on Azure by using established patterns and practices. The Azure Architecture Center is a catalog of solution ideas, example workloads, reference architectures, technology decision guides, and architecture guides that help cloud architects and engineers build workloads aligned with the Azure Well-Architected Framework and the Cloud Adoption Framework for Azure.
+
+# ------------------------------------------------------------------------------
+# Section 2: Get started (required) - 1 to 4 cards, primary entry points
+# ------------------------------------------------------------------------------
+getStarted:
+  title: Get started
+  summary: Choose a starting point based on what you need to do.
+  items:
+    - title: Browse architectures
+      description: Explore reference architectures, example workloads, and solution ideas.
+      url: ./browse/index.yml
+    - title: Learn the fundamentals
+      description: Understand architecture styles, design principles, and best practices.
+      url: ./guide/index.md
+    - title: Make technology choices
+      description: Compare and select the right Azure services for your workload.
+      url: ./guide/technology-choices/technology-choices-overview.md
+    - title: Apply design patterns
+      description: Use proven patterns to solve common cloud design challenges.
+      url: ./patterns/index.md
+
+# ------------------------------------------------------------------------------
+# Section 3: Core workflows (required for single-TOC) - 2 to 6 task cards,
+# each with a title, description, and up to 3 links.
+# ------------------------------------------------------------------------------
+coreWorkflows:
+  title: Design areas
+  summary: Explore architecture guidance for designing and operating solutions across the Azure platform.
+  items:
+    - icon:
+        src: /media/common/i_design.svg
+      title: Design for the cloud
+      description: Establish a strong foundation with architecture styles, best practices, and reusable patterns.
+      links:
+        - text: Learn fundamental architecture styles
+          url: ./guide/architecture-styles/index.md
+        - text: Use best practices in cloud applications
+          url: ./best-practices/index-best-practices.md
+        - text: Apply cloud design patterns
+          url: ./patterns/index.md
+    - icon:
+        src: /media/common/i_architecture.svg
+      title: Learn about AI and Machine Learning solutions
+      description: Explore AI architectures, solution ideas, guides, and technology choices.
+      links:
+        - text: Get started with AI architecture
+          url: ./ai-ml/ai-get-started.md
+        - text: Choose an AI service
+          url: ./data-guide/technology-choices/ai-services.md
+        - text: Microsoft Foundry chat baseline architecture
+          url: ./ai-ml/architecture/baseline-microsoft-foundry-chat.yml
+    - icon:
+        src: /media/common/i_architecture.svg
+      title: Learn about Azure compute solutions
+      description: Explore Azure compute architectures, solution ideas, guides, and technology choices.
+      links:
+        - text: Get started with compute architecture design
+          url: ./solution-ideas/articles/compute-get-started.md
+        - text: Choose an Azure compute service
+          url: ./guide/technology-choices/compute-decision-tree.md
+        - text: Azure VM baseline architecture
+          url: ./virtual-machines/baseline.yml
+    - icon:
+        src: /media/common/i_architecture.svg
+      title: Learn about Azure data solutions
+      description: Explore Azure data architectures, solution ideas, guides, and technology choices.  
+      links:
+        - text: Get started with data architecture
+          url: ./databases/database-get-started.md
+        - text: Choose an Azure data service
+          url: ./guide/technology-choices/data-stores-getting-started.md
+        - text: Greenfield lakehouse on Microsoft Fabric
+          url: ./example-scenario/data/greenfield-lakehouse-fabric.yml
+    - icon:
+        src: /media/common/i_best-practices.svg
+      title: Operationalize application and AI workloads
+      description: Apply DevOps, MLOps, and GenAIOps practices across workload lifecycles.
+      links:
+        - text: Get started with DevOps architecture
+          url: ./guide/devops/devops-get-started.md
+        - text: Assess your MLOps maturity
+          url: ./ai-ml/guide/mlops-maturity-model.md
+        - text: Extend MLOps with GenAIOps
+          url: ./ai-ml/guide/genaiops-for-mlops.md
+
+    - icon:
+        src: /media/common/i_overview.svg
+      title: Secure and connect workloads
+      description: Design secure network topologies and layered defenses.
+      links:
+        - text: Get started with security architecture
+          url: ./security/security-get-started.md
+        - text: Hub-spoke network topology
+          url: ./networking/architecture/hub-spoke.yml
+        - text: Implement a secure hybrid network
+          url: ./reference-architectures/dmz/secure-vnet-dmz.yml
+
+# ------------------------------------------------------------------------------
+# Section 4: Learn formats (optional) - 2 to 8 learning-modality cards.
+# Icon must be one of: documentation, training, credentials, architecture,
+# code-samples, shows, assessments, labs, qna.
+#
+# TEMP ICON PREVIEW: This section is currently populated with one card per icon
+# value so the rendered glyphs can be compared side by side. The section caps at
+# 8 items, so the 9th icon ("shows") is listed at the bottom - swap it in for one
+# of the others to preview it. Restore real learn-format content before the
+# actual conversion.
+# ------------------------------------------------------------------------------
+# learnFormats:
+#   title: Icon preview (temporary)
+#   summary: One card per learnFormatIcon value to compare the rendered glyphs.
+#   items:
+#     - icon: documentation
+#       title: documentation
+#       description: Icon value "documentation".
+#       url: ./browse/index.yml
+#     - icon: training
+#       title: training
+#       description: Icon value "training".
+#       url: /training/azure/
+#     - icon: credentials
+#       title: credentials
+#       description: Icon value "credentials".
+#       url: /credentials/browse/
+#     - icon: architecture
+#       title: architecture
+#       description: Icon value "architecture".
+#       url: ./browse/index.yml
+#     - icon: code-samples
+#       title: code-samples
+#       description: Icon value "code-samples".
+#       url: /samples/browse/
+#     - icon: assessments
+#       title: assessments
+#       description: Icon value "assessments".
+#       url: /assessments/
+#     - icon: labs
+#       title: labs
+#       description: Icon value "labs".
+#       url: /training/
+#     - icon: qna
+#       title: qna
+#       description: Icon value "qna".
+#       url: /answers/products/azure
+    # 9th icon, omitted above to stay within the 8-item cap. Swap in to preview:
+    # - icon: shows
+    #   title: shows
+    #   description: Icon value "shows".
+    #   url: /shows/
+
+# ------------------------------------------------------------------------------
+# Section 5: Support and reference (optional) - 2 to 4 lightweight cards.
+# ------------------------------------------------------------------------------
+supportReference:
+  title: Frameworks and reference
+  summary: Guidance that complements the architectures in this center.
+  items:
+    - icon:
+        src: /media/common/i_architecture.svg
+      title: Cloud Adoption Framework for Azure
+      url: /azure/cloud-adoption-framework
+    - icon:
+        src: /media/common/i_best-practices.svg
+      title: Azure Well-Architected Framework
+      url: /azure/well-architected/pillars
+    - icon:
+        src: /media/common/i_get-started.svg
+      title: Azure migration guidance
+      url: /azure/migration/
+    - icon:
+        src: /media/common/i_overview.svg
+      title: What's new in the Architecture Center
+      url: ./changelog.md

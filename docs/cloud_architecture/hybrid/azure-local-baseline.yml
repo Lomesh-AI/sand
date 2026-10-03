@@ -1,0 +1,28 @@
+### YamlMime:Architecture
+metadata:
+  title: Azure Local Hyperconverged Baseline Reference Architecture
+  description: Learn how to design a connected, highly available Azure Local deployment that uses hyperconverged storage and storage-switched networking.
+  author: neilbird
+  ms.author: nebird
+  ms.date: 09/30/2026
+  ms.topic: reference-architecture
+  ms.subservice: reference-architecture
+  ai-usage: ai-assisted
+  ms.category:
+    - hybrid
+    - management-and-governance
+  ms.custom: arb-hybrid
+name: Azure Local hyperconverged baseline reference architecture
+azureCategories:
+  - hybrid
+  - management-and-governance
+summary: Learn how to design a connected, highly available Azure Local deployment that uses hyperconverged storage and storage-switched networking.
+products:
+  - azure-local
+  - azure-arc
+  - azure-key-vault
+  - azure-monitor
+  - defender-for-cloud
+thumbnailUrl: /azure/architecture/browse/thumbs/azure-local-baseline-thumbnail.png
+content: |
+   [!INCLUDE[](azure-local-baseline-content.md)]

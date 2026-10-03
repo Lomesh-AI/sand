@@ -1,0 +1,25 @@
+### YamlMime:Architecture
+metadata:
+  title: Highly available SharePoint farm
+  description: Deploy a highly available SharePoint farm for intranet capabilities that uses Microsoft Entra ID, a SQL always on instance, and SharePoint resources.
+  author: claytonsiemens77
+  ms.author: pnp
+  ms.date: 05/27/2022
+  ms.topic: solution-idea
+  ms.subservice: solution-idea
+  ms.category:
+    - web
+    - management-and-governance
+  ai-usage: ai-assisted
+name: Highly available SharePoint farm
+azureCategories:
+  - web
+  - management-and-governance
+summary: Deploy a highly available SharePoint farm for intranet capabilities that uses Microsoft Entra ID, a SQL always on instance, and SharePoint resources.
+products:
+  - entra-id
+  - azure-load-balancer
+  - sql-server
+thumbnailUrl: /azure/architecture/browse/thumbs/highly-available-sharepoint-farm.png
+content: |
+   [!include[](highly-available-sharepoint-farm-content.md)]

@@ -1,0 +1,24 @@
+### YamlMime:Architecture
+metadata:
+  title: Migrate a Web App by Using Azure API Management
+  description: Review an example scenario in which an e-commerce company in the travel industry uses Azure API Management to migrate a legacy web application.
+  author: andrwca
+  ms.author: andrewcardy
+  ms.date: 03/27/2026
+  ms.topic: example-scenario
+  ms.subservice: example-scenario
+  ms.custom:
+    - arb-web
+azureCategories:
+  - web
+  - migration
+  - integration
+products:
+  - azure-api-management
+  - azure-monitor
+  - azure-app-service
+name: Migrate a web app by using Azure API Management
+summary: Review an example scenario in which an e-commerce company in the travel industry uses Azure API Management to migrate a legacy web application.
+thumbnailUrl: /azure/architecture/browse/thumbs/api-management-api-scenario-architecture.png
+content: |
+   [!INCLUDE[](apim-api-scenario-content.md)]

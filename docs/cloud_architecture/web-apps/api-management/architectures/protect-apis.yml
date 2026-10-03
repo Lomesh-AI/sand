@@ -1,0 +1,21 @@
+### YamlMime:Architecture
+metadata:
+  title: Protect APIs by using Azure Application Gateway and Azure API Management
+  description: Learn best practices for networking in Azure multitenant solutions, including hub-and-spoke topologies, virtual networks, and regional deployment strategies.
+  author: ckittel
+  ms.author: pnp
+  ms.date: 07/17/2025
+  ms.topic: reference-architecture
+  ms.subservice: reference-architecture
+  ms.custom: arb-web
+azureCategories:
+  - web
+  - security
+products:
+  - azure-api-management
+  - azure-application-gateway
+name: Protect APIs by using Application Gateway and API Management
+summary: Learn how to protect APIs with API Management and Application Gateway.
+thumbnailUrl: /azure/architecture/browse/thumbs/protect-apis.png
+content: |
+  [!INCLUDE[](protect-apis-content.md)]

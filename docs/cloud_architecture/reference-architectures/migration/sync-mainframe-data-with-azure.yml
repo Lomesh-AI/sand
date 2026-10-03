@@ -1,0 +1,25 @@
+### YamlMime:Architecture
+metadata:
+  title: Replicate and Sync Mainframe Data to Azure
+  description: Learn how to replicate data during mainframe and midrange system modernization. Sync on-premises data with Azure data during modernization.
+  author: ms-amsolo
+  ms.author: askhande
+  ms.date: 06/17/2026
+  ms.topic: solution-idea
+  ms.subservice: solution-idea
+  ai-usage: ai-assisted
+  ms.collection:
+    - migration
+    - onprem-to-azure
+azureCategories:
+  - migration
+  - databases
+products:
+  - azure-data-factory
+  - azure-databricks
+  - fabric
+name: Replicate and sync mainframe data to Azure
+summary: Learn how to replicate data during mainframe and midrange system modernization. Sync on-premises data with Azure data during modernization.
+thumbnailUrl: /azure/architecture/browse/thumbs/sync-mainframe-data-with-azure.png
+content: |
+  [!INCLUDE[](sync-mainframe-data-with-azure-content.md)]

@@ -1,0 +1,27 @@
+### YamlMime:Architecture
+metadata:
+  title: Move archive data from mainframe systems to Azure
+  description: Learn about a reference architecture that shows how to move data from mainframe and midrange systems to Azure.
+  author: PratimDasgupta
+  ms.author: prdasgu
+  ms.date: 06/07/2024
+  ms.topic: example-scenario
+  ms.subservice: example-scenario
+  ai-usage: ai-assisted
+  ms.collection:
+    - migration
+    - onprem-to-azure
+azureCategories:
+  - migration
+  - databases
+products:
+  - azure-data-factory
+  - azure-storage
+  - azure-files
+  - azure-blob-storage
+  - azure-data-box-family
+name: Move archive data from mainframe systems to Azure
+summary: Learn about a reference architecture that shows how to move data from mainframe and midrange systems to Azure.
+thumbnailUrl: /azure/architecture/browse/thumbs/mainframe-export-archive-data.png
+content: |
+  [!include[](move-archive-data-mainframes-content.md)]

@@ -1,0 +1,28 @@
+### YamlMime:Architecture
+metadata:
+  title: Securely Managed Web Applications
+  description: Learn how to deploy secure applications by using the App Service Environment, Azure Application Gateway, and Web Application Firewall.
+  author: nimccoll
+  ms.author: nimccoll
+  ms.date: 06/20/2025
+  ms.topic: example-scenario
+  ms.subservice: example-scenario
+  ms.category:
+    - security
+    - web
+  ms.custom:
+    - arb-web
+name: Securely managed web applications
+azureCategories:
+  - security
+  - web
+summary: Learn how to deploy secure applications by using the App Service Environment, Azure Application Gateway, and Web Application Firewall.
+products:
+  - azure-app-service
+  - azure-application-gateway
+  - azure-sql-database
+  - azure-vpn-gateway
+  - azure-web-application-firewall
+thumbnailUrl: /azure/architecture/browse/thumbs/fully-managed-secure-apps.png
+content: |
+   [!INCLUDE[](fully-managed-secure-apps-content.md)]

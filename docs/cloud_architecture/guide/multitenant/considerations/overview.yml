@@ -1,0 +1,21 @@
+### YamlMime:Architecture
+metadata:
+  title: Architectural considerations for a multitenant solution
+  description: This article introduces the key considerations when planning a multitenant architecture.
+  author: johndowns
+  ms.author: pnp
+  ms.date: 06/11/2025
+  ms.update-cycle: 1095-days
+  ms.topic: concept-article
+  ms.subservice: architecture-guide
+  ms.custom:
+    - arb-saas
+azureCategories:
+  - management-and-governance
+products:
+  - azure
+name: Architectural considerations for a multitenant solution
+summary: This article introduces the key considerations when planning a multitenant architecture.
+thumbnailUrl: /azure/architecture/browse/thumbs/deployment-stamps.png
+content: |
+  [!include[](overview-content.md)]

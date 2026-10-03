@@ -1,0 +1,32 @@
+### YamlMime:Architecture
+metadata:
+  title: Basic Enterprise Integration on Azure
+  description: Learn how to implement a basic enterprise integration architecture on Azure by using Azure Logic Apps and Azure API Management.
+  services: logic-apps
+  author: karlrissland
+  ms.author: karlriss
+  ms.reviewer: jonfan, estfan, LADocs
+  ms.date: 04/16/2026
+  ms.topic: reference-architecture
+  ms.subservice: reference-architecture
+  ai-usage: ai-assisted
+  ms.category:
+    - integration
+    - developer-tools
+    - management-and-governance
+  ms.custom: arb-integrations
+name: Basic enterprise integration on Azure
+azureCategories:
+  - integration
+  - developer-tools
+  - management-and-governance
+summary: Learn how to implement a basic enterprise integration architecture on Azure by using Azure Logic Apps and Azure API Management.
+products:
+  - entra-id
+  - azure-api-management
+  - azure-dns
+  - azure-logic-apps
+  - azure-monitor
+thumbnailUrl: /azure/architecture/browse/thumbs/simple-enterprise-integration.png
+content: |
+   [!INCLUDE[](basic-enterprise-integration-content.md)]

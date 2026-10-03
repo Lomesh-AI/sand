@@ -1,0 +1,142 @@
+{
+  "build": {
+    "content": [
+      {
+        "src": ".",
+        "dest": ".",
+        "files": [
+          "**/*.md",
+          "**/toc.yml",
+          "**/toc.experimental.yml",
+          "**/*context.yml",
+          "**/index.yml",
+          "**/*.yml"
+        ],
+        "exclude": [
+          "**/obj/**",
+          "**/*.liquid.md",
+          "**/_css/**",
+          "**/includes/**",
+          "**/_bread/**",
+          "**/_themes/**",
+          "**/**/*-content.md"
+        ]
+      },
+      {
+        "src": "_bread",
+        "dest": "bread",
+        "files": [
+          "**/*.yml"
+        ]
+      }
+    ],
+    "resource": [
+      {
+        "src": ".",
+        "dest": ".",
+        "files": [
+          "**/*.css",
+          "**/*.png",
+          "**/*.jpg",
+          "**/*.jpeg",
+          "**/*.gif",
+          "**/*.svg",
+          "**/*.js",
+          "**/*.json",
+          "**/*.docx",
+          "feed.atom"
+        ],
+        "exclude": [
+          "**/obj/**",
+          "**/_themes/**"
+        ]
+      },
+      {
+        "files": [
+          "includes/**/*.svg",
+          "includes/**/*.png",
+          "includes/**/*.jpg",
+          "includes/**/*.jpeg",
+          "includes/**/*.gif"
+        ],
+        "exclude": [
+          "**/obj/**",
+          "**/_themes/**"
+        ],
+        "src": "null",
+        "dest": null
+      }
+    ],
+    "overwrite": [],
+    "externalReference": [],
+    "globalMetadata": {
+      "feedback_system": "Standard",
+      "feedback_github_repo": "MicrosoftDocs/architecture-center",
+      "breadcrumb_path": "/azure/architecture/bread/toc.json",
+      "brand": "azure",
+      "uhfHeaderId": "azure",
+      "titleSuffix": "Azure Architecture Center",
+      "ms.author": "pnp",
+      "ms.service": "azure-architecture-center",
+      "ms.update-cycle": "365-days",
+      "manager": "coxford",
+      "_op_documentIdPathDepotMapping": {
+        "./": {
+          "depot_name": "MSDN.azure-architecture-center",
+          "folder_relative_path_in_docset": "./"
+        }
+      },
+      "ms.topic": "concept-article",
+      "searchScope": [
+        "Azure",
+        "Azure Architecture Center"
+      ]
+    },
+    "fileMetadata": {
+      "featureFlags": {},
+      "open_to_public_contributors": {
+        "**/*.yml": true,
+        "**/*.md": true
+      },
+      "searchScope": {
+        "**/*.md": [
+          "Azure",
+          "Azure Architecture Center"
+        ],
+        "**/*.yml": [
+          "Azure",
+          "Azure Architecture Center"
+        ]
+      },
+      "ms.update-cycle": {
+        "guide/multitenant/considerations/*.md": "1095-days",
+        "guide/multitenant/considerations/*.yml": "1095-days",
+        "ai-ml/**/*.md": "180-days",
+        "ai-ml/**/*.yml": "180-days",
+        "landing-zones/*.md": "1095-days",
+        "landing-zones/*.yml": "1095-days",
+        "guide/architecture-styles/**/*.md": "1095-days",
+        "guide/architecture-styles/**/*.yml": "1095-days",
+        "guide/design-principles/*.md": "1095-days",
+        "guide/design-principles/*.yml": "1095-days",
+        "microservices/design/*.md": "1095-days",
+        "microservices/design/*.yml": "1095-days",
+        "microservices/model/*.md": "1095-days",
+        "microservices/model/*.yml": "1095-days",
+        "best-practices/*.yml": "1095-days",
+        "best-practices/*.md": "1095-days",
+        "antipatterns/**/*.md": "1095-days",
+        "antipatterns/**/*.yml": "1095-days",
+        "guide/responsible-innovation/**/*.yml": "1095-days",
+        "guide/responsible-innovation/**/*.md": "1095-days",
+        "patterns/*.yml": "1095-days",
+        "patterns/*.md": "1095-days"
+      }
+    },
+    "template": [
+      "docs.html"
+    ],
+    "dest": "azure",
+    "markdownEngineName": "markdig"
+  }
+}

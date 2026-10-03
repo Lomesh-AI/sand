@@ -9,11 +9,15 @@ def load_documents_from_directory(directory_path: str):
     """
     documents = []
     for path in Path(directory_path).rglob('*.md'):
-        text = path.read_text(encoding='utf-8')
-        documents.append({
-            'text': text,
-            "source": str(path)
-        })
+        try:
+            text = path.read_text(encoding='utf-8', errors='replace')
+            if text.strip():
+                documents.append({
+                    'text': text,
+                    "source": str(path)
+                })
+        except Exception as exc:
+            print(f"Warning: skipped {path}: {exc}")
     
     return documents
 

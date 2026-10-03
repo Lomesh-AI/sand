@@ -1,0 +1,26 @@
+### YamlMime:Architecture
+metadata:
+  title: Azure Virtual Machines baseline architecture in an Azure landing zone
+  description: Learn how to build on the baseline architecture to address changes and expectations when you deploy it in an Azure landing zone.
+  author: PageWriter-MSFT
+  ms.author: pnp
+  ms.date: 01/06/2024
+  ms.topic: concept-article
+  ms.subservice: reference-architecture
+  ai-usage: ai-assisted
+azureCategories:
+    - compute
+    - migration
+    - networking
+products:
+  - azure-bastion
+  - azure-firewall
+  - azure-log-analytics
+  - azure-virtual-machines
+  - azure-virtual-network
+
+name: Azure Virtual Machines baseline architecture in an Azure landing zone
+summary: Learn how to build on the baseline architecture to address changes and expectations when you deploy it in an Azure landing zone.
+thumbnailUrl: /azure/architecture/browse/thumbs/baseline-landing-zone.png
+content: |
+  [!include[](baseline-landing-zone-content.md)]

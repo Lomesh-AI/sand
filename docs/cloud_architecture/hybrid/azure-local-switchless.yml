@@ -1,0 +1,28 @@
+### YamlMime:Architecture
+metadata:
+  title: Azure Local Hyperconverged Storage Switchless Architecture
+  description: Learn how to design a connected, hyperconverged Azure Local deployment of three to four machines that uses direct storage links and dual top-of-rack switches.
+  author: neilbird
+  ms.author: nebird
+  ms.date: 09/28/2026
+  ms.topic: reference-architecture
+  ms.subservice: reference-architecture
+  ai-usage: ai-assisted
+  ms.category:
+    - hybrid
+    - management-and-governance
+  ms.custom: arb-hybrid
+name: Azure Local hyperconverged storage switchless architecture
+azureCategories:
+  - hybrid
+  - management-and-governance
+summary: Learn how to design a connected, hyperconverged Azure Local deployment of three to four machines that uses direct storage links and dual top-of-rack switches.
+products:
+  - azure-local
+  - azure-arc
+  - azure-key-vault
+  - azure-monitor
+  - defender-for-cloud
+thumbnailUrl: /azure/architecture/browse/thumbs/azure-local-switchless-thumbnail.png
+content: |
+   [!INCLUDE[](azure-local-switchless-content.md)]

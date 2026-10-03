@@ -1,0 +1,29 @@
+### YamlMime:Architecture
+metadata:
+  title: Modern Data Platform Architecture for SMBs
+  description: Use Microsoft Fabric and Azure Databricks to build a modern data platform architecture designed for small and medium businesses.
+  author: njogendran
+  ms.author: bonitarui
+  ms.date: 05/12/2026
+  ms.topic: solution-idea
+  ms.subservice: solution-idea
+  ms.custom:
+  - arb-data
+  ai-usage: ai-assisted
+azureCategories:
+  - analytics
+  - databases
+  - storage
+  - open-source
+products:
+  - azure-data-lake
+  - azure-databricks
+  - fabric
+  - dynamics-365
+  - azure-data-factory
+  - microsoft-purview
+name: Build a modern data platform architecture for SMBs by using Microsoft Fabric and Azure Databricks
+summary: Use Microsoft Fabric and Azure Databricks to build a modern data platform architecture designed for small and medium businesses.
+thumbnailUrl: /azure/architecture/browse/thumbs/small-medium-businesses-simplified-architecture.png
+content: |
+  [!INCLUDE[](small-medium-modern-data-platform-content.md)]

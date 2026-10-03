@@ -1,0 +1,26 @@
+### YamlMime:Architecture
+metadata:
+  title: Automate API Management Configuration Deployments by Using APIOps CLI
+  description: Use the APIOps CLI and Azure API Management to extract, review, and deploy API Management configuration as version-controlled artifacts.
+  author: PatAltimore
+  ms.author: patricka
+  ms.date: 09/01/2026
+  ms.topic: example-scenario
+  ms.subservice: example-scenario
+  ms.custom:
+    - arb-web
+  ai-usage: ai-assisted
+azureCategories:
+  - devops
+  - developer-tools
+  - management-and-governance
+products:
+  - azure-api-management
+  - azure-devops
+  - azure-pipelines
+  - github
+name: Automate API Management configuration by using APIOps CLI
+summary: Use the APIOps CLI and Azure API Management to extract, review, and deploy API Management configuration as version-controlled artifacts.
+thumbnailUrl: /azure/architecture/browse/thumbs/automated-api-deployments-apiops-architecture.png
+content: |
+  [!INCLUDE[](automated-api-deployments-apiops-content.md)]

@@ -1,0 +1,25 @@
+### YamlMime:Architecture
+metadata:
+  title: Azure hybrid options
+  description: Learn how Azure hybrid options address workload placement, operations, sovereignty, connectivity, and AI requirements.
+  author: neilbird
+  ms.author: nebird
+  ms.date: 08/24/2026
+  ms.topic: concept-article
+  ms.subservice: architecture-guide
+  ai-usage: ai-assisted
+azureCategories:
+  - hybrid
+  - management-and-governance
+  - ai-machine-learning
+products:
+  - azure-arc
+  - azure-local
+  - foundry-local
+  - azure-iot-operations
+  - azure-iot-edge
+name: Azure hybrid options
+summary: Learn how Azure hybrid options address workload placement, operations, sovereignty, connectivity, and AI requirements.
+thumbnailUrl: /azure/architecture/browse/thumbs/hybrid-decision-tree.png
+content: |
+  [!INCLUDE[](hybrid-considerations-content.md)]

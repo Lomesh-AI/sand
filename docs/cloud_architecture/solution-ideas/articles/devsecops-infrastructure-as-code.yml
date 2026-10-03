@@ -1,0 +1,22 @@
+### YamlMime:Architecture
+metadata:
+  title: DevSecOps for Infrastructure as Code (IaC)
+  description: See how to implement a GitHub-based DevSecOps pipeline that can validate and deploy infrastructure as code (IaC) to Azure.
+  author: yeeshian
+  ms.author: yeeshianlee
+  ms.date: 07/23/2026
+  ms.topic: solution-idea
+  ms.subservice: solution-idea
+  ai-usage: ai-assisted
+azureCategories:
+  - devops
+  - security
+products:
+  - microsoft-sentinel
+  - azure-monitor
+  - github
+name: DevSecOps for infrastructure as code (IaC)
+summary: See how to implement a GitHub-based DevSecOps pipeline that can validate and deploy infrastructure as code (IaC) to Azure.
+thumbnailUrl: /azure/architecture/browse/thumbs/devsecops-for-iac-diagram.png
+content: |
+  [!INCLUDE[](devsecops-infrastructure-as-code-content.md)]

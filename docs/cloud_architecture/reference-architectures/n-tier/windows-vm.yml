@@ -1,0 +1,24 @@
+### YamlMime:Architecture
+metadata:
+  title: Run a Windows VM on Azure
+  description: Learn about best practices for running a Windows virtual machine on Azure, which requires some extra components, including networking and storage resources.
+  author: DTInTheCloud
+  ms.author: dtrumpower
+  ms.date: 04/29/2026
+  ms.topic: reference-architecture
+  ms.subservice: reference-architecture
+  ms.category:
+    - compute
+name: Run a Windows VM on Azure
+azureCategories:
+  - compute
+summary: Learn about best practices for running a Windows virtual machine on Azure, which requires some extra components, including networking and storage resources.
+products:
+  - azure-backup
+  - azure-blob-storage
+  - azure-resource-manager
+  - azure-storage
+  - azure-virtual-machines
+thumbnailUrl: /azure/architecture/browse/thumbs/single-vm-diagram.png
+content: |
+   [!INCLUDE[](windows-vm-content.md)]

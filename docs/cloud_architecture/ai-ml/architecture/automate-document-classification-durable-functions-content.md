@@ -1,0 +1,205 @@
+This article describes an architecture that processes various documents. The architecture uses the durable functions feature of Azure Functions to implement pipelines. The pipelines use Azure Document Intelligence to split and classify the documents within a file and to extract their content. A Foundry Agent Service prompt agent that has an Azure AI Search tool grounds chat responses in the indexed content and returns inline citations.
+
+## Architecture
+
+:::image type="complex" border="false" source="_images/automate-document-classification-durable-functions.svg" alt-text="Diagram that shows an architecture to identify, classify, and search documents." lightbox="_images/automate-document-classification-durable-functions.svg":::
+The image is a flowchart that contains multiple sections. The Ingestion section contains an Azure web app. It connects via arrows to the Document store section, which contains Azure Blob Storage, and the Activation section, which contains an Azure Service Bus queue. The Azure Functions orchestration section contains icons that represent analyze activity, metadata store activity, and embedding activity. Arrows point from these icons to the Document processing, Document metadata collection, and Vectorize and index sections. The embedding activity also connects to a section that's labeled Chat with your data. This section contains a Microsoft Foundry-hosted `text-embedding-3-large` model that returns vector embeddings. A Foundry Agent Service prompt agent uses an Azure AI Search tool to ground responses in the indexed content. The Ingestion section points to the Chat with your data section and, from there, to the Vectorize and index section.
+:::image-end:::
+
+*Download a [Visio file](https://arch-center.azureedge.net/automate-document-classification-durable-functions.vsdx) of this architecture.*
+
+### Workflow
+
+The following workflow corresponds to the previous diagram:
+
+1. A user uploads a document file to a web app. The file contains multiple embedded documents of various types, like PDF or multiple-page Tag Image File Format (TIFF) files. Azure Blob Storage stores the document file (**1a**). To initiate pipeline processing, the web app adds a command message to an Azure Service Bus queue (**1b**).
+
+1. The command message triggers the durable functions orchestration. The message contains metadata that identifies the Blob Storage location of the document file to process. Each durable functions instance processes only one document file.
+
+1. The *analyze* activity function calls the Document Intelligence Analyze Document API, which passes the storage location of the document file to process. The analyze function reads and identifies each document within the document file. This function returns the name, type, page ranges, and content of each embedded document to the orchestration.
+
+1. The *metadata store* activity function saves the document type, location, and page range information for each document in an Azure Cosmos DB store.
+
+1. The *embedding* activity function uses the Semantic Kernel SDK's `TextChunker` to split each document into overlap-aware passages that are sized to the embedding model's context window. The function then calls a `text-embedding-3-large` model deployed in Microsoft Foundry to create vector embeddings for each chunk. The architecture uses `text-embedding-3-large` rather than `text-embedding-3-small` because the document corpus spans multiple document types and benefits from the higher retrieval quality that the larger embedding dimensions provide. The function writes the embeddings and associated content to a vector-enabled index in AI Search and adds a correlation ID to each search document so that search results map back to the corresponding document metadata in Azure Cosmos DB.
+
+   > [!NOTE]
+   > Microsoft Agent Framework replaces Semantic Kernel for most scenarios. Agent Framework doesn't include a text-splitting primitive, so this architecture uses `TextChunker` from Semantic Kernel for chunking only. To reduce the number of libraries used in your custom code, plan to replace `TextChunker` with another splitter when one releases in Agent Framework or another Foundry-aligned library.
+
+1. The web app calls a pre-deployed Agent Service prompt agent by using the Azure AI Projects SDK. The workload team deploys and versions the agent as part of its release pipeline. The web app doesn't create agents on the fly for each user. The AI Search tool is attached to the agent, and the agent is configured to ground its responses in the indexed content and return inline citations. For code-first agent definition with custom multistep orchestration, see the [Agent Framework alternative](#alternatives).
+
+1. The agent uses its AI Search tool to run a hybrid (vector + keyword) query against the index, summarizes the retrieved chunks, and returns a cited response to the web app. The web app uses the correlation IDs from the citations to look up the corresponding records in Azure Cosmos DB, which include links to the original document file in Blob Storage.
+
+### Components
+
+- [Durable functions](/azure/durable-task/durable-functions/durable-functions-overview) is a feature of [Azure Functions](/azure/well-architected/service-guides/azure-functions) that you can use to write stateful functions in a serverless compute environment. In this architecture, a message in a Service Bus queue triggers a durable functions instance. This instance then initiates and orchestrates the document-processing pipeline.
+
+- [Azure Cosmos DB](/azure/well-architected/service-guides/cosmos-db) is a globally distributed, multiple-model database that can scale throughput and storage capacity across any number of geographic regions. Comprehensive service-level agreements (SLAs) guarantee throughput, latency, availability, and consistency. In this architecture, Azure Cosmos DB serves as the metadata store for the document classification information.
+
+- [Azure Storage](/azure/storage/common/storage-introduction) is a set of scalable and secure cloud services for data, apps, and workloads. It includes [Blob Storage](/azure/well-architected/service-guides/azure-blob-storage), [Azure Files](/azure/well-architected/service-guides/azure-files), [Azure Table Storage](/azure/storage/tables/table-storage-overview), and [Azure Queue Storage](/azure/storage/queues/storage-queues-introduction). In this architecture, Blob Storage stores the document files that the user uploads and that the durable functions pipeline processes.
+
+- [Service Bus](/azure/well-architected/service-guides/azure-service-bus) is a managed enterprise message broker that has message [queues](/azure/service-bus-messaging/service-bus-queues-topics-subscriptions#queues) and publish-subscribe [topics](/azure/service-bus-messaging/service-bus-queues-topics-subscriptions#topics-and-subscriptions). In this architecture, Service Bus triggers durable functions instances.
+
+- [Azure App Service](/azure/well-architected/service-guides/app-service-web-apps) provides a framework to build, deploy, and scale web apps. The Web Apps feature of App Service is an HTTP-based tool that hosts web applications, REST APIs, and mobile back ends. You can use Web Apps to develop in .NET, Java, Ruby, Node.js, PHP, or Python. Applications can run and scale in Windows-based and Linux-based environments. In this architecture, users interact with the document-processing system through an App Service-hosted web app.
+
+- [Document Intelligence](/azure/ai-services/document-intelligence/overview) is a service that extracts insights from your documents, forms, and images. This architecture uses Document Intelligence to analyze the document files and extract the embedded documents along with content and metadata information.
+
+- [AI Search](/azure/search/search-what-is-azure-search) provides a search experience for private, diverse content in web, mobile, and enterprise applications. In this architecture, AI Search [vector storage](/azure/search/vector-store) indexes embeddings of the extracted document content and metadata information so that users can search and retrieve documents by using NLP.
+
+- [Foundry](/azure/foundry/what-is-foundry) is a platform that you use to build, test, and deploy AI solutions and models as a service (MaaS). In this architecture, Foundry hosts the chat model that powers the agent and the embedding model that the embedding activity calls.
+
+  - [Foundry projects](/azure/foundry/how-to/create-projects) are specialized workspaces that you use to establish connections to data sources, define agents, and invoke deployed models. This architecture uses a single Foundry project that has a connection to the AI Search service.
+
+  - [Foundry Models](/azure/foundry/concepts/foundry-models-overview) is a platform that deploys flagship models, including OpenAI models, from the Azure AI catalog in a Microsoft-hosted environment. This approach uses MaaS deployment. The architecture deploys models by using the [Global Standard](/azure/foundry/foundry-models/concepts/deployment-types#global-standard) configuration with a fixed quota.
+
+  - [Agent Service](/azure/foundry/agents/overview) hosts the prompt agent that handles the chat-with-your-data experience. The web app calls the agent by using the AI Projects SDK. The agent uses the [AI Search tool](/azure/foundry/agents/how-to/tools/ai-search) to retrieve grounding context from the vector index and to return responses with inline citations.
+
+### Alternatives
+
+- To facilitate global distribution, this solution stores metadata in Azure Cosmos DB. [Azure SQL Database](/azure/well-architected/service-guides/azure-sql-database) is another persistent storage option for document metadata and information.
+
+- To trigger durable functions instances, you can use other messaging platforms, including [Azure Event Grid](/azure/event-grid/overview). Azure Functions supports several event-driven triggers, including HTTP, queues, timers, Blob Storage, and Event Grid. For blob-based processing, you can configure the [Blob Storage trigger to use Event Grid as its source](/azure/azure-functions/functions-event-grid-blob-trigger) by setting `BlobTriggerSource.EventGrid`. The Event Grid source has lower latency than the default polling-based source.
+
+- Instead of calling an embedding model directly from the embedding activity, you can use [AI Search integrated vectorization](/azure/search/vector-search-integrated-vectorization) to have AI Search call the embedding model through an indexer and skillset. This option removes the embedding activity from your Functions code. Use integrated vectorization instead of the direct-call pattern in this architecture when:
+
+  - **Your source data is already addressable by an AI Search indexer** (Blob Storage, Azure SQL, Azure Cosmos DB, or Azure Data Lake Storage). The indexer pulls and chunks on a schedule or change feed without you owning the orchestration code.
+  - **You don't need per-document business logic between extraction and embedding.** This architecture's embedding activity attaches Azure Cosmos DB correlation IDs and applies custom chunk metadata. Integrated vectorization keeps you on the built-in skillset and limits per-chunk customization.
+  - **You want chunking and embedding versioning tied to the index schema.** Integrated vectorization centralizes the chunker, embedding model, and index in the AI Search resource, which simplifies re-indexing when the model or chunk strategy changes.
+
+- For code-based agent orchestration, you can build a hosted agent (preview) by using the [Agent Framework](/agent-framework/overview) and deploy it to Agent Service instead of using a prompt agent. Use this option when you need custom multistep orchestration, multi-agent coordination, or full control over the agent loop.
+
+- To provide a natural language interface for users, you can substitute a different chat model in the Agent Service prompt agent. This architecture uses `gpt-4.1` as the default agent model. Foundry Models also offers models from Mistral, Meta, Cohere, and Hugging Face that you can use instead of the default, depending on your quality, latency, and cost targets.
+
+### Scenario details
+
+In this architecture, the pipelines identify the documents in a document file, classify them by type, and store information to use in subsequent processing.
+
+Many companies need to manage and process documents that they scan in bulk and that contain several different document types, like PDFs or multiple-page TIFF images. These documents might originate from outside the organization, and the receiving company doesn't control the format.
+
+Because of these constraints, organizations must build their own document-parsing solutions that can include custom technology and manual processes. For example, someone might manually separate individual document types and add classification qualifiers for each document type.
+
+Many of these custom solutions are based on the state machine workflow pattern. The solutions use database systems to persist workflow state and use polling services that check for the states that they need to process. Maintaining and enhancing these solutions can increase complexity and effort.
+
+Organizations need reliable, scalable, and resilient solutions to process and manage document identification and classification for their organization's document types. This solution can process millions of documents each day with full observability into the success or failure of the processing pipeline.
+
+Users interact with the system in a conversational manner by using an Agent Service prompt agent that's grounded in the indexed document content. The agent uses retrieval-augmented generation (RAG) to ground answers in source documents and returns inline citations that users can follow back to the original file.
+
+### Potential use cases
+
+- **Generate report titles.** Many government agencies and municipalities manage paper records that don't have a digital form. An effective automated solution can generate a file that contains all the documents that you need to satisfy a document request.
+
+- **Manage maintenance records.** Scan and send paper records, like aircraft, locomotive, and machinery maintenance records, to outside organizations.
+
+- **Process permits.** City and county permitting departments maintain paper documents that they generate for permit inspection reporting. You can take a picture of several inspection documents and automatically identify, classify, and search across these records.
+
+- **Analyze planograms.** Retail and consumer goods companies manage inventory and compliance through store shelf planogram analysis. You can take a picture of a store shelf and extract label information from different products to automatically identify, classify, and quantify the product information.
+
+## Considerations
+
+These considerations implement the pillars of the Azure Well-Architected Framework, which is a set of guiding tenets that you can use to improve the quality of a workload. For more information, see [Well-Architected Framework](/azure/well-architected/).
+
+### Reliability
+
+Reliability helps ensure that your application can meet the commitments that you make to your customers. For more information, see [Design review checklist for Reliability](/azure/well-architected/reliability/checklist).
+
+To ensure reliability and high availability when you invoke models from Foundry projects that use OpenAI models hosted in Azure, consider using a generative API gateway like [Azure API Management](/azure/api-management/genai-gateway-capabilities). This approach manages requests across multiple model deployments or Foundry endpoints. The Azure back-end gateway supports round-robin, weighted, and priority-based routing across deployments and provides full control of traffic distribution. This approach lets your Foundry project implement resilient failover strategies and intelligent load distribution tuned to your performance, regional availability, or cost requirements.
+
+For learning and early proof-of-concept work, use a [Global Standard](/azure/foundry/foundry-models/concepts/deployment-types#global-standard) deployment. Global Standard is pay-as-you-go, provides the highest default quota, and uses the Azure global infrastructure to route each request to the most available region. This approach reduces the chance of encountering regional quota or capacity constraints while you experiment and aligns with the Microsoft guidance to use Global Standard as the default starting point.
+
+For production workloads, use the following considerations to choose a [deployment type](/azure/foundry/foundry-models/concepts/deployment-types):
+
+- **Data-processing location:** Use *Global* deployments (`GlobalStandard` or `GlobalProvisionedManaged`) when inferencing can occur in any Foundry region. Use *Data Zone* deployments (`DataZoneStandard` or `DataZoneProvisionedManaged`) when inferencing must stay within one of the data zone boundaries. Use *Standard* (`Standard`) or *Regional Provisioned* (`ProvisionedManaged`) when inferencing must stay in a single region. The data at rest in this architecture (document files in Blob Storage, document metadata in Azure Cosmos DB, and the vector index in AI Search) remains in your selected Azure geography for all deployment types. Only the model inference request and response can cross regions when you use Global or Data Zone deployments.
+
+- **Throughput and cost model:** Use *Standard* deployment types for low-to-medium, bursty, or exploratory workloads. These types use pay-per-token billing with no reserved capacity. Use *Provisioned* deployment types for predictable, higher-volume workloads that need reserved throughput, lower latency variance, and the option to apply reservations for cost optimization.
+
+Most teams begin with **Global Standard** for development, or use **Data Zone Standard** when data residency is important. After they determine their steady-state throughput and latency requirements, they move critical paths to **Provisioned** SKUs.
+
+For more information about reliability in solution components, see [SLA information for Azure online services](https://www.microsoft.com/licensing/docs/view/Service-Level-Agreements-SLA-for-Online-Services?lang=1).
+
+### Cost Optimization
+
+Cost Optimization focuses on ways to reduce unnecessary expenses and improve operational efficiencies. For more information, see [Design review checklist for Cost Optimization](/azure/well-architected/cost-optimization/checklist).
+
+The most significant costs for this architecture include the following components:
+
+- Model inference usage via Foundry, which includes OpenAI or other models
+- Document ingestion and processing via Document Intelligence
+- Indexing and search consumption via AI Search
+
+To optimize costs, consider the following recommendations:
+
+- **Use provisioned throughput units (PTUs) or reservations for Foundry deployments** instead of pay-per-token usage when the workload is predictable.
+
+  - For more information, see the following resources:
+
+    - [Provisioned throughput overview](/azure/foundry/openai/concepts/provisioned-throughput)
+    - [Save costs with Foundry reservations](/azure/cost-management-billing/reservations/microsoft-foundry)
+    - [Plan and manage Foundry costs](/azure/foundry/concepts/manage-costs)
+
+- **Use a [Batch deployment](/azure/foundry/openai/how-to/batch) for the embedding activity.** The embedding step runs in the back-end pipeline and isn't user-interactive, which fits the asynchronous Batch model. Global Batch (`GlobalBatch`) and Data Zone Batch (`DataZoneBatch`) can cost less than Global Standard for the same model and provide a 24-hour target turnaround.
+
+- **Plan for [regional deployments and operational scale-up scheduling](/azure/search/search-sku-manage-costs) in AI Search.**
+
+- **Use [commitment tier pricing](/azure/ai-services/commitment-tier) for Document Intelligence** to manage predictable costs.
+
+- **Use reserved capacity and life cycle policies** to [rightsize storage accounts](/azure/storage/blobs/storage-blob-reserved-capacity).
+
+- **Use the pay-as-you-go strategy for your architecture and [scale out](/azure/well-architected/cost-optimization/optimize-scaling-costs) as needed** instead of investing in large-scale resources at the start. As your solution matures, you can use [App Service reservations](/azure/cost-management-billing/reservations/reservation-discount-app-service) to help reduce costs where applicable.
+
+- **Consider opportunity costs in your architecture and balance a first-mover advantage strategy with a fast-follow strategy.** To estimate the initial cost and operational costs, use the [preconfigured estimate in the Azure pricing calculator](https://azure.com/e/131d1f225c7f4a92aa5a1d8273ac5199). Adjust the values to match your specific document volume and processing requirements.
+
+- **Establish [budgets and controls](/azure/well-architected/cost-optimization/collect-review-cost-data) that set cost limits for your solution.** To set up forecasting and actual cost alerts, use [budget alerting](/azure/cost-management-billing/costs/tutorial-acm-create-budgets).
+
+### Performance Efficiency
+
+Performance Efficiency refers to your workload's ability to scale to meet user demands efficiently. For more information, see [Design review checklist for Performance Efficiency](/azure/well-architected/performance-efficiency/checklist).
+
+This solution can expose performance bottlenecks when you process high volumes of data. To ensure proper performance efficiency for your solution, understand and plan for [Azure Functions scaling options](/azure/azure-functions/functions-scale#scale), [Foundry Tools autoscaling](/azure/ai-services/autoscale), and [Azure Cosmos DB partitioning](/azure/cosmos-db/partitioning-overview).
+
+- **Apply scalable compute and orchestration** by using durable functions, which is part of Azure Functions, for the document-processing pipeline and tune its scaling behavior. For more information, see [Performance and scale in durable functions](/azure/azure-functions/durable/durable-functions-perf-and-scale).
+
+- **Choose the appropriate deployment model in Foundry** for inference workloads. Use serverless APIs for variable workloads and provisioned throughput models when you expect heavy, consistent traffic. For more information, see [Provisioned throughput for Models](/azure/foundry/openai/concepts/provisioned-throughput) and [Performance and latency optimization for Azure OpenAI and Models](/azure/foundry/openai/how-to/latency).
+
+- **Optimize indexing and retrieval performance** by configuring appropriate partitioning, replicas, and schema for AI Search. For more information, see [AI Search performance tips](/azure/search/search-performance-tips).
+
+- **Establish performance baselines and feedback loops.** Define realistic latency and throughput targets early, monitor actual system performance continuously, and refine architecture and operational configurations as usage patterns evolve.
+
+Apply these practices to help ensure that your document classification solution remains responsive and cost effective as the solution scales.
+
+## Contributors
+
+*Microsoft maintains this article. The following contributors wrote this article.*
+
+Principal author:
+
+- [Peter Lee](https://www.linkedin.com/in/peter-t-lee/) | Senior Cloud Solution Architect
+ 
+Other contributors:
+
+- [Kevin Kraus](https://www.linkedin.com/in/kevin-w-kraus) | Principal Solution Engineer
+- [Brian Swiger](https://www.linkedin.com/in/brianswiger) | Principal Solution Engineer
+
+*To see nonpublic LinkedIn profiles, sign in to LinkedIn.*
+
+## Next steps
+
+The following articles provide an introduction to relevant technologies:
+
+- [What is Blob Storage?](/azure/storage/blobs/storage-blobs-overview)
+- [What is Service Bus?](/azure/service-bus-messaging/service-bus-messaging-overview)
+- [Get started with App Service](/azure/app-service/getting-started)
+- [Introduction to Azure Cosmos DB](/azure/cosmos-db/introduction)
+
+For product documentation, see the following resources:
+
+- [Azure documentation for all products](/azure?product=all)
+- [Durable functions documentation](/azure/azure-functions/durable)
+- [Foundry documentation](/azure/foundry)
+- [Document Intelligence documentation](/azure/ai-services/document-intelligence)
+- [AI Search documentation](/azure/search)
+- [Foundry Agent Service documentation](/azure/foundry/agents/overview)
+- [Agent Framework documentation](/agent-framework/)
+
+## Related resources
+
+- [Custom document processing models on Azure](../../example-scenario/document-processing/build-deploy-custom-models.yml)
+- [Image classification on Azure](../../ai-ml/idea/intelligent-apps-image-processing.yml)

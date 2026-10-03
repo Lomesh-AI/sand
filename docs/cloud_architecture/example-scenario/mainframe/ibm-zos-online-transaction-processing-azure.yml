@@ -1,0 +1,22 @@
+### YamlMime:Architecture
+metadata:
+  title: Migrate IBM z/OS OLTP Workloads to Azure
+  description: Migrate a z/OS online transaction processing (OLTP) workload to an Azure application that is cost effective, responsive, scalable, and adaptable.
+  author: ashish-khandelwal-ms
+  ms.author: askhande
+  ms.date: 05/29/2026
+  ms.topic: solution-idea
+  ms.subservice: solution-idea
+  ai-usage: ai-assisted
+azureCategories:
+  - migration
+products:
+  - azure-front-door
+  - azure-traffic-manager
+  - azure-kubernetes-service
+  - azure-managed-redis
+name: Migrate IBM z/OS OLTP workloads to Azure
+summary: Migrate a z/OS online transaction processing (OLTP) workload to an Azure application that is cost effective, responsive, scalable, and adaptable.
+thumbnailUrl: /azure/architecture/browse/thumbs/ibm-zos-online-transaction-processing-on-azure.png
+content: |
+  [!INCLUDE[](ibm-zos-online-transaction-processing-azure-content.md)]

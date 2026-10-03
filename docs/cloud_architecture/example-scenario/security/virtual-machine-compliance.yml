@@ -1,0 +1,22 @@
+### YamlMime:Architecture
+metadata:
+  title: Manage Virtual Machine Compliance
+  description: Manage virtual machine compliance without disrupting DevOps practices. Use Azure VM Image Builder and Azure Compute Gallery to minimize risk from system images.
+  author: yemrea
+  ms.author: yemrea
+  ms.date: 04/21/2026
+  ms.topic: example-scenario
+  ms.subservice: example-scenario
+  ai-usage: ai-assisted
+azureCategories:
+  - compute
+  - devops
+  - management-and-governance
+  - security
+products:
+  - azure-policy
+name: Manage virtual machine compliance
+summary: Manage virtual machine compliance without disrupting DevOps practices. Use Azure VM Image Builder and Azure Compute Gallery to minimize risk from system images.
+thumbnailUrl: /azure/architecture/browse/thumbs/virtual-machine-compliance-architecture-thumbnail.png
+content: |
+  [!INCLUDE[](virtual-machine-compliance-content.md)]

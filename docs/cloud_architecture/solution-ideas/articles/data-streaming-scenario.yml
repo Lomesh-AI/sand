@@ -1,0 +1,29 @@
+### YamlMime:Architecture
+metadata:
+  title: Data streaming with AKS
+  description: Use AKS to easily ingest and process a real-time data stream, with millions of data points collected via sensors.
+  author: francisnazareth
+  ms.author: fnazaret
+  ms.date: 11/03/2024
+  ms.topic: solution-idea
+  ms.subservice: solution-idea
+  ai-usage: ai-assisted
+  ms.category:
+    - databases
+  ms.custom:
+    - arb-data
+    - arb-containers
+name: Data streaming with AKS
+azureCategories:
+  - databases
+  - open-source
+summary: Use AKS to easily ingest and process a real-time data stream, with millions of data points collected via sensors.
+products:
+  - azure-app-service
+  - azure-api-management
+  - azure-container-registry
+  - azure-managed-redis
+  - azure-cosmos-db
+thumbnailUrl: /azure/architecture/browse/thumbs/data-streaming-scenario.png
+content: |
+   [!include[](data-streaming-scenario-content.md)]

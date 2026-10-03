@@ -1,0 +1,24 @@
+### YamlMime:Architecture
+metadata:
+  title: Modern Data Warehouse Medallion Architecture in Microsoft Fabric
+  description: Learn how to implement a SQL-first modern data warehouse medallion architecture by using Fabric Data Warehouse, OneLake, Fabric Data Factory, and Power BI.
+  author: prabhkaur1977
+  ms.author: prkau
+  ms.date: 08/18/2026
+  ms.topic: example-scenario
+  ms.subservice: example-scenario
+  ai-usage: ai-assisted
+  ms.category:
+    - databases
+  ms.custom:
+    - arb-data
+name: Modern data warehouse medallion architecture in Microsoft Fabric
+azureCategories:
+  - databases
+summary: Learn how to implement a SQL-first modern data warehouse medallion architecture by using Fabric Data Warehouse, OneLake, Fabric Data Factory, and Power BI.
+products:
+  - fabric
+  - power-bi
+thumbnailUrl: /azure/architecture/browse/thumbs/modern-data-warehouse-microsoft-fabric.png
+content: |
+   [!INCLUDE[](dataops-mdw-content.md)]

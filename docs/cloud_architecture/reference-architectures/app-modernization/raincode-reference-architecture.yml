@@ -1,0 +1,30 @@
+### YamlMime:Architecture
+metadata:
+  title: Rehost mainframe applications to Azure with Raincode compilers
+  description: This architecture shows how the Raincode COBOL compiler modernizes mainframe legacy applications.
+  author: swread
+  ms.author: sread
+  ms.date: 07/10/2024
+  ms.topic: reference-architecture
+  ms.subservice: reference-architecture
+  ms.category:
+    - integration
+    - databases
+  ms.collection:
+    - migration
+    - onprem-to-azure
+name: Rehost mainframe applications to Azure with Raincode compilers
+azureCategories:
+  - integration
+  - databases
+  - open-source
+summary: This architecture shows how the Raincode COBOL compiler modernizes mainframe legacy applications.
+products:
+  - azure-virtual-machines
+  - azure-kubernetes-service
+  - azure-files
+  - azure-expressroute
+  - azure-load-balancer
+thumbnailUrl: /azure/architecture/browse/thumbs/raincode-reference-architecture-02.png
+content: |
+   [!INCLUDE[](raincode-reference-architecture-content.md)]

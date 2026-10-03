@@ -1,0 +1,180 @@
+---
+title: Improper Instantiation antipattern
+description: Avoid continually creating new instances of an object that is meant to be created once and then shared.
+ms.author: pnp
+author: claytonsiemens77
+ms.date: 06/05/2017
+ms.topic: design-pattern
+ms.subservice: best-practice
+keywords:
+  - "Antipattern singleton"
+  - "what is instantiation"
+  - "instantiation"
+  - "improper instantiation"
+  - "antipattern"
+---
+
+# Improper Instantiation antipattern
+
+Sometimes new instances of a class are continually created, when it's meant to be created once and then shared. This behavior can hurt performance and is called an *improper instantiation antipattern*. An antipattern is a common response to a recurring problem that is usually ineffective and might be counter-productive.
+
+## Problem description
+
+Many libraries provide abstractions of external resources. Internally, these classes typically manage their own connections to the resource, acting as brokers that clients can use to access the resource. Here are some examples of broker classes that are relevant to Azure applications:
+
+- `System.Net.Http.HttpClient`. Communicates with a web service using HTTP.
+- `Azure.Messaging.ServiceBus.ServiceBusClient`. Connects to Azure Service Bus for sending and receiving messages.
+- `Microsoft.Azure.Cosmos.CosmosClient`. Connects to an Azure Cosmos DB instance.
+- `StackExchange.Redis.ConnectionMultiplexer`. Connects to Redis, including Azure Managed Redis.
+
+These classes are intended to be instantiated once and reused throughout the lifetime of an application. However, it's a common misunderstanding that these classes should be acquired only as necessary and released quickly. (The ones listed here happen to be .NET libraries, but the pattern isn't unique to .NET.) The following ASP.NET example creates an instance of `HttpClient` to communicate with a remote service.
+
+```csharp
+public class NewHttpClientInstancePerRequestController : ApiController
+{
+    // This method creates a new instance of HttpClient and disposes it for every call to GetProductAsync.
+    public async Task<Product> GetProductAsync(string id)
+    {
+        using (var httpClient = new HttpClient())
+        {
+            var hostName = HttpContext.Current.Request.Url.Host;
+            var result = await httpClient.GetStringAsync(string.Format("http://{0}:8080/api/...", hostName));
+            return new Product { Name = result };
+        }
+    }
+}
+```
+
+In a web application, this technique isn't scalable. A new `HttpClient` object is created for each user request. Under heavy load, the web server might exhaust the number of available sockets, resulting in `SocketException` errors.
+
+This problem isn't restricted to the `HttpClient` class. Other classes that wrap resources or are expensive to create might cause similar problems. The following example creates an instance of the `ExpensiveToCreateService` class. In this case, the problem isn't necessarily socket exhaustion, but rather how long it takes to create each instance. Continually creating and destroying instances of this class might adversely affect the scalability of the system.
+
+```csharp
+public class NewServiceInstancePerRequestController : ApiController
+{
+    public async Task<Product> GetProductAsync(string id)
+    {
+        var expensiveToCreateService = new ExpensiveToCreateService();
+        return await expensiveToCreateService.GetProductByIdAsync(id);
+    }
+}
+
+public class ExpensiveToCreateService
+{
+    public ExpensiveToCreateService()
+    {
+        // Simulate delay due to setup and configuration of ExpensiveToCreateService
+        Thread.SpinWait(Int32.MaxValue / 100);
+    }
+    ...
+}
+```
+
+## How to fix improper instantiation antipattern
+
+If the class that wraps the external resource is shareable and thread-safe, create a shared singleton instance or a pool of reusable instances of the class.
+
+The following example uses a static `HttpClient` instance, thus sharing the connection across all requests.
+
+```csharp
+public class SingleHttpClientInstanceController : ApiController
+{
+    private static readonly HttpClient httpClient;
+
+    static SingleHttpClientInstanceController()
+    {
+        httpClient = new HttpClient();
+    }
+
+    // This method uses the shared instance of HttpClient for every call to GetProductAsync.
+    public async Task<Product> GetProductAsync(string id)
+    {
+        var hostName = HttpContext.Current.Request.Url.Host;
+        var result = await httpClient.GetStringAsync(string.Format("http://{0}:8080/api/...", hostName));
+        return new Product { Name = result };
+    }
+}
+```
+
+> [!NOTE]
+> In modern .NET applications, the recommended approach for managing `HttpClient` instances is to use [`IHttpClientFactory`](/dotnet/core/extensions/httpclient-factory), which manages handler lifetimes and ensures timely DNS updates. The static singleton pattern shown above remains valid for simpler scenarios or non-DI environments, especially when combined with `PooledConnectionLifetime`.
+
+## Considerations
+
+- The key element of this antipattern is repeatedly creating and destroying instances of a *shareable* object. If a class isn't shareable (not thread-safe), then this antipattern doesn't apply.
+
+- The type of shared resource might dictate whether you should use a singleton or create a pool. The `HttpClient` class is designed to be shared rather than pooled. Other objects might support pooling, enabling the system to spread the workload across multiple instances.
+
+- Objects that you share across multiple requests *must* be thread-safe. The `HttpClient` class is built for this usage pattern, but other classes might not support concurrent requests, so check the available documentation.
+
+- Be careful about setting properties on shared objects, as this can lead to race conditions. For example, setting `DefaultRequestHeaders` on the `HttpClient` class before each request can create a race condition. Set such properties once (for example, during startup), and create separate instances if you need to configure different settings.
+
+- Some resource types are scarce and should not be held onto. Database connections are an example. Holding an open database connection that isn't required might prevent other concurrent users from gaining access to the database.
+
+- In .NET, many objects that establish connections to external resources manage those connections internally. These objects are intended to be saved and reused, rather than disposed and re-created. For example, in Azure Service Bus, the `ServiceBusClient` object manages the AMQP connection to the namespace and is used to create `ServiceBusSender` and `ServiceBusReceiver` instances. Create one `ServiceBusClient` and reuse it for the lifetime of the application. For more information, see [Best Practices for performance improvements using Service Bus Messaging][service-bus-messaging].
+
+## How to detect improper instantiation antipattern
+
+Symptoms of this problem include a drop in throughput or an increased error rate, along with one or more of the following changes:
+
+- An increase in exceptions that indicate exhaustion of resources such as sockets, database connections, and file handles.
+- Increased memory use and garbage collection.
+- An increase in network, disk, or database activity.
+
+You can do the following steps to help identify this problem:
+
+1. Performing process monitoring of the production system, to identify points when response times slow down or the system fails due to lack of resources.
+2. Examine the telemetry data captured at these points to determine which operations might be creating and destroying resource-consuming objects.
+3. Load test each suspected operation, in a controlled test environment rather than the production system.
+4. Review the source code and examine how the broker objects are managed.
+
+Examine stack traces for operations that are slow-running or that generate exceptions when the system is under load. This information can help to identify how these operations are using resources. Exceptions can help to determine whether errors are caused by shared resources being exhausted.
+
+## Example diagnosis
+
+The following sections apply these steps to the sample application described earlier.
+
+### Identify points of slowdown or failure
+
+The following image shows results generated using [New Relic APM][new-relic], showing operations that have a poor response time. In this case, the `GetProductAsync` method in the `NewHttpClientInstancePerRequest` controller is worth investigating further. Notice that the error rate also increases when these operations are running.
+
+:::image type="content" source="./_images/HttpClientInstancePerRequestWebTransactions.jpg" alt-text="The New Relic monitor dashboard showing the sample application creating a new instance of an HttpClient object for each request" lightbox="./_images/HttpClientInstancePerRequestWebTransactions.jpg" border="false":::
+
+### Examine telemetry data and find correlations
+
+The next image shows data captured using thread profiling, over the same period corresponding as the previous image. The system spends a significant time opening socket connections, and even more time closing them and handling socket exceptions.
+
+:::image type="content" source="./_images/HttpClientInstancePerRequestThreadProfile.jpg" alt-text="The New Relic thread profiler showing the sample application creating a new instance of an HttpClient object for each request" lightbox="./_images/HttpClientInstancePerRequestThreadProfile.jpg" border="false":::
+
+### Performing load testing
+
+Use load testing to simulate the typical operations that users might do. This can help to identify which parts of a system experience resource exhaustion under varying loads. Run these tests in a controlled environment rather than the production system. The following graph shows the throughput of requests handled by the `NewHttpClientInstancePerRequest` controller as the user load increases to 100 concurrent users.
+
+:::image type="content" source="./_images/HttpClientInstancePerRequest.jpg" alt-text="Throughput of the sample application creating a new instance of an HttpClient object for each request" lightbox="./_images/HttpClientInstancePerRequest.jpg" border="false":::
+
+At first, the volume of requests handled per second increases as the workload increases. At about 30 users, however, the volume of successful requests reaches a limit, and the system starts to generate exceptions. From then on, the volume of exceptions gradually increases with the user load.
+
+The load test reported these failures as HTTP 500 (Internal Server) errors. Reviewing the telemetry showed that these errors were caused by the system running out of socket resources, as more and more `HttpClient` objects were created.
+
+The next graph shows a similar test for a controller that creates the custom `ExpensiveToCreateService` object.
+
+:::image type="content" source="./_images/ServiceInstancePerRequest.jpg" alt-text="Throughput of the sample application creating a new instance of the ExpensiveToCreateService for each request" lightbox="./_images/ServiceInstancePerRequest.jpg" border="false":::
+
+This time, the controller doesn't generate any exceptions, but throughput still reaches a plateau, while the average response time increases by a factor of 20. (The graph uses a logarithmic scale for response time and throughput.) Telemetry showed that creating new instances of the `ExpensiveToCreateService` was the main cause of the problem.
+
+### Implement the solution and verify the result
+
+After switching the `GetProductAsync` method to share a single `HttpClient` instance, a second load test showed improved performance. No errors were reported, and the system was able to handle an increasing load of up to 500 requests per second. The average response time was cut in half, compared with the previous test.
+
+:::image type="content" source="./_images/SingleHttpClientInstance.jpg" alt-text="Throughput of the sample application reusing the same instance of an HttpClient object for each request" lightbox="./_images/SingleHttpClientInstance.jpg" border="false":::
+
+For comparison, the following image shows the stack trace telemetry. This time, the system spends most of its time performing real work, rather than opening and closing sockets.
+
+:::image type="content" source="./_images/SingleHttpClientInstanceThreadProfile.jpg" alt-text="The New Relic thread profiler showing the sample application creating single instance of an HttpClient object for all requests" lightbox="./_images/SingleHttpClientInstanceThreadProfile.jpg" border="false":::
+
+The next graph shows a similar load test using a shared instance of the `ExpensiveToCreateService` object. Again, the volume of handled requests increases in line with the user load, while the average response time remains low.
+
+:::image type="content" source="./_images/SingleServiceInstance.jpg" alt-text="Graph showing a similar load test using a shared instance of the ExpensiveToCreateService object." lightbox="./_images/SingleServiceInstance.jpg" border="false":::
+
+[service-bus-messaging]: /azure/service-bus-messaging/service-bus-performance-improvements
+[new-relic]: https://newrelic.com/products/application-monitoring

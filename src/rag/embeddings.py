@@ -10,11 +10,12 @@ class Embedder:
         except Exception:
             self.model = SentenceTransformer(model_name)
 
-    def embed(self, text):
+    def embed(self, text, batch_size: int = 64, show_progress_bar: bool = True):
         return self.model.encode(
             text, 
+            batch_size=batch_size,
             normalize_embeddings=True,
-            show_progress_bar=False,
+            show_progress_bar=show_progress_bar,
         )
     
     def embed_query(self, query: str):

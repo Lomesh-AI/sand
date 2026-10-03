@@ -1,0 +1,125 @@
+---
+title: Get Started with Analytics Architecture Design
+description: Get an overview of Azure analytics technologies, guidance, solution ideas, and reference architectures.
+ms.author: pnp
+author: anaharris-ms
+ms.update-cycle: 1095-days
+ms.topic: concept-article
+ms.subservice: category-get-started
+ms.date: 01/26/2026
+ai-usage: ai-assisted
+ms.custom: arb-data
+---
+
+# Get started with analytics architecture design
+
+Organizations rely on the compute, storage, and analytical power of Azure to scale, stream, predict, and view their data. Analytics solutions transform volumes of data into useful business intelligence (BI), such as reports and visualizations, and inventive AI, such as forecasts based on machine learning. Azure offers a range of cloud-based analytics tools for organizations that are new to analytics and organizations that need to expand their implementation. Analytics solutions help organizations use data at scale. You can use a [big data architecture](../guide/architecture-styles/big-data.md) or an [Internet of Things (IoT) architecture](../guide/architecture-styles/big-data.md#iot-architecture) to process raw data and then move it to an analytical data store. This data store becomes a single source of truth that can power insightful analytics solutions.
+
+## Architecture
+
+:::image type="complex" border="false" source="./media/analytics-get-started-diagram.svg" alt-text="Diagram that shows the analytics solution journey on Azure." lightbox="./media/analytics-get-started-diagram.svg":::
+   Diagram that shows four columns, labeled Learn, Assign roles, Choose storage, and Choose technology. Two tiles appear in the Learn column, labeled Azure data services and Data modeling. Three user groups appear in the Assign roles column: Data analysts, Data engineers, and Self-service users. One square tile labeled Analytical data store appears in the Choose storage column. Four functions appear in the Choose technology column: Report and visualize, Stream data, Make predictions, and Scale analytics.
+:::image-end:::
+
+*Download a [Visio file](https://arch-center.azureedge.net/analytics-get-started-diagram.vsdx) of this architecture.*
+  
+The previous diagram demonstrates a typical basic or baseline analytics implementation. For real-world solutions that you can build in Azure, see [Analytics architectures](#analytics-architectures).
+
+## Explore analytics guides, architectures, and solution ideas
+
+The articles in this section include guides and fully developed architectures that you can deploy in Azure and expand to production-grade solutions. Solution ideas demonstrate implementation patterns and possibilities to consider as you plan your analytics proof-of-concept (POC) development. These articles can help you decide how to use analytics technologies in Azure.
+
+[!INCLUDE [analytics-get-started](../includes/analytics-get-started-include.md)]
+
+## Learn about analytics on Azure
+
+Microsoft Learn provides [free online training resources](/training) for Azure analytics technologies. The platform offers videos, tutorials, and hands-on labs for specific products and services, along with learning paths organized by job role.
+
+The following resources provide foundational knowledge for analytics implementations on Azure:
+
+- [Browse Azure data articles](/training/browse/?products=azure&filter-products=data&terms=data)
+- [Introduction to Microsoft Azure data core data concepts](/training/paths/azure-data-fundamentals-explore-core-data-concepts/)
+- [Get started with Fabric](/training/paths/get-started-fabric/)
+- [Get started with Microsoft data analytics](/training/paths/data-analytics-microsoft)
+- [Implement a data analytics solution with Azure Databricks](/training/paths/data-engineer-azure-databricks/)
+- [Build machine learning solutions by using Azure Databricks](/training/paths/build-operate-machine-learning-solutions-azure-databricks/)
+
+## Organizational readiness
+
+Organizations at the beginning of the cloud adoption process can use the [Cloud Adoption Framework for Azure](/azure/cloud-adoption-framework/) to access proven guidance that accelerates cloud adoption.
+
+To help ensure the quality of your analytics solution on Azure, follow the guidance in the [Azure Well-Architected Framework](/azure/well-architected/). The Well-Architected Framework provides prescriptive guidance for organizations that seek architectural excellence and describes how to design, provision, and monitor cost-optimized Azure solutions.
+
+## Best practices
+
+Best practices in analytics ensure that solutions are scalable, reliable, cost efficient, and secure.
+
+### Data analytics
+
+To use analytics on Azure, you need to decide how to [store your data](../data-guide/technology-choices/analytical-data-stores.md). Then you can choose the best [data analytics technology](../data-guide/technology-choices/analysis-visualizations-reporting.md) for your scenario. Consider the following factors:
+
+- **Data storage:** Choose between data lakes, data warehouses, and lakehouses based on your data structure and query patterns. For more information about the database solutions that power analytics workloads, see [Database architecture design](../databases/database-get-started.md).
+
+- **Processing model:** Determine whether batch processing, stream processing, or a combination best fits your workload requirements.
+
+- **Analytics tools:** Select BI and AI technologies that meet your team's skills and business needs.
+
+### Trustworthy data
+
+For high-quality analytics, you need robust, trustworthy data. [Information security](/azure/well-architected/security) practices help ensure that your data is protected in transit and at rest. Access to your data must also be secure. To help produce trustworthy data, consider the following practices and controls:
+
+- [Governance policies](/azure/well-architected/security/establish-baseline): Define clear data ownership, classification, and access policies.
+
+- [Identity and access management](/azure/well-architected/security/identity-access): Implement role-based access control and least-privilege principles.
+
+- [Network security controls](/azure/well-architected/security/networking): Protect data flows between services and prevent unauthorized access.
+
+- [Data protection](/azure/well-architected/security/encryption): Encrypt data at rest and in transit.
+
+At the platform level, the following [big data best practices](../guide/architecture-styles/big-data.md#best-practices) contribute to trustworthy analytics on Azure:
+
+- **Orchestrate data ingestion:** Use an Azure Data Factory or Fabric pipelines-supported data workflow or pipeline solution.
+
+- **Process data in place:** Use a distributed data store, which is a big data approach that supports larger volumes of data and a wider range of formats.
+
+- **Scrub sensitive data early:** To avoid accidental storage of sensitive data in your data lake, remove or mask this data as part of the ingestion workflow.
+
+- **Consider total cost:** Balance the per-unit cost of the required compute nodes against the per-minute cost to run a job on those nodes.
+
+- **Create a unified data lake:** Combine storage for files in multiple formats, whether structured, semi-structured, or unstructured. Use Data Lake Storage as your single centralized source. For more information, see [BI solution architecture in the Center of Excellence](/power-bi/guidance/center-of-excellence-business-intelligence-solution-architecture).
+
+## Stay current with analytics
+
+Azure analytics services evolve to address modern data challenges. Stay informed about the latest [updates and features](https://azure.microsoft.com/updates/).
+
+To stay current with key analytics services, see the following articles:
+
+- [What's new in Fabric?](/fabric/fundamentals/whats-new?)
+- [Azure Databricks release notes](/azure/databricks/release-notes/)
+- [What's new in Azure Data Explorer](/azure/data-explorer/whats-new)
+- [What's new in Power BI?](/power-bi/fundamentals/whats-new)
+
+## Other resources
+
+The following resources can help you discover more about analytics.
+
+### Real-time analytics
+
+Organizations can use real-time analytics to act on data as it arrives. The following resources can help you get started with real-time analytics on Azure:
+
+- [Real-time analytics on big data architecture](../solution-ideas/articles/real-time-analytics.yml): Process and analyze streaming data at scale.
+
+- [IoT analytics with Azure Data Explorer](../solution-ideas/articles/iot-azure-data-explorer.yml): Analyze IoT personal data in real time.
+
+- [Stream processing with Stream Analytics](../reference-architectures/data/stream-processing-stream-analytics.yml): Build serverless streaming solutions.
+
+- [Create a modern analytics architecture by using Azure Databricks](../solution-ideas/articles/azure-databricks-modern-analytics-architecture.yml): Discover enterprise-grade analytics by using Apache Spark.
+
+- For more analytics examples, see the [Azure Architecture Center](../browse/index.yml?azure_categories=analytics)
+
+## Amazon Web Services (AWS) or Google Cloud professionals
+
+To help you get started quickly, the following articles compare Azure analytics options to other cloud services and provide migration guidance:
+
+- [Relational database technologies on Azure and AWS](../aws-professional/databases.md)
+- [Google Cloud to Azure services comparison](../gcp-professional/services.md)

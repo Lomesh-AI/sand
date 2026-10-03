@@ -1,0 +1,27 @@
+### YamlMime:Architecture
+metadata:
+  title: Reengineer Mainframe Batch Applications on Azure
+  description: Use Azure services to reengineer mainframe batch applications. This solution idea can reduce costs and improve scalability.
+  author: ashish-khandelwal-ms-zz
+  ms.author: askhande
+  ms.date: 06/17/2026
+  ms.topic: solution-idea
+  ms.subservice: solution-idea
+  ai-usage: ai-assisted
+  ms.collection:
+    - migration
+    - onprem-to-azure
+azureCategories:
+  - developer-tools
+  - migration
+products:
+  - azure-data-factory
+  - azure-databricks
+  - azure-kubernetes-service
+  - azure-sql-database
+  - azure-storage
+name: Re-engineer mainframe batch applications on Azure
+summary: Use Azure services to reengineer mainframe batch applications. This solution idea can reduce costs and improve scalability.
+thumbnailUrl: /azure/architecture/browse/thumbs/reengineered-batch-application-architecture.png
+content: |
+  [!include[](reengineer-mainframe-batch-apps-azure-content.md)]

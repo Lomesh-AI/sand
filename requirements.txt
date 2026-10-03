@@ -27,3 +27,6 @@ pydantic
 
 # Environment variables
 python-dotenv
+
+# AWS / Cloud Storage
+boto3

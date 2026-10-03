@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import sys
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -13,9 +14,12 @@ from hybrid_retrieval import HybridRetrieval
 from reranker import Reranker
 
 
+from s3_storage import S3RAGStorage
+
+
 class RAGPipeline:
 
-    def __init__(self, docs_dir="docs", cache_dir=None):
+    def __init__(self, docs_dir="docs", cache_dir=None, s3_storage: Optional[S3RAGStorage] = None):
         docs_path = Path(docs_dir)
         if not docs_path.is_absolute():
             sand_root = Path(__file__).resolve().parents[2]
@@ -27,8 +31,13 @@ class RAGPipeline:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
+        self.s3_storage = s3_storage or S3RAGStorage()
         index_file = self.cache_dir / "index.faiss"
         chunks_file = self.cache_dir / "chunks.json"
+
+        # Attempt to pull cached vector store and chunks from AWS S3 if enabled and not present locally
+        if self.s3_storage.is_enabled and (not index_file.exists() or not chunks_file.exists()):
+            self.s3_storage.download_assets(self.cache_dir)
 
         self.embedding_model = Embedder()
 
@@ -46,6 +55,10 @@ class RAGPipeline:
             self.vector_store.save(index_file)
             with open(chunks_file, "w", encoding="utf-8") as f:
                 json.dump(self.chunks, f, ensure_ascii=False, indent=2)
+
+            # Auto-upload freshly built index to S3 if configured
+            if self.s3_storage.is_enabled:
+                self.s3_storage.upload_assets(self.cache_dir)
 
         self.bm25_store = BM25Store(self.chunks)
         self.hybrid_retriever = HybridRetrieval(

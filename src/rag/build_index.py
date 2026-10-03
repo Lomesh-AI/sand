@@ -27,14 +27,17 @@ for env_file in [SRC_DIR / ".env", SAND_ROOT / ".env"]:
     if env_file.exists():
         load_dotenv(env_file, override=False)
 
-from ingestion import load_documents_from_directory
-from chunking import chunk_documents
-from embeddings import Embedder
-from vector_search import VectorStore
-from s3_storage import S3RAGStorage
+
+
 
 
 def build_and_benchmark(docs_dir: Path, data_dir: Path, limit: int = None, upload_to_s3: bool = False, batch_size: int = 64):
+    from ingestion import load_documents_from_directory
+    from chunking import chunk_documents
+    from embeddings import Embedder
+    from vector_search import VectorStore
+    from s3_storage import S3RAGStorage
+
     print("=" * 65)
     print("ENGINEERING KNOWLEDGE RAG: VECTOR INDEX BUILDER")
     print("=" * 65)

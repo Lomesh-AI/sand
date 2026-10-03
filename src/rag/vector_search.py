@@ -2,16 +2,25 @@ import faiss
 import numpy as np
 
 class VectorStore:
-    def __init__(self, embeddings=None, index=None):
+    def __init__(self, embeddings=None, index=None, dimension: int = None):
         if index is not None:
             self.index = index
+        elif dimension is not None:
+            self.index = faiss.IndexFlatIP(int(dimension))
         elif embeddings is not None:
             embeddings = np.asarray(embeddings, dtype=np.float32)
             dimensions = embeddings.shape[1]
             self.index = faiss.IndexFlatIP(dimensions)
             self.index.add(embeddings)
         else:
-            raise ValueError("Either embeddings or index must be provided")
+            raise ValueError("Either embeddings, index, or dimension must be provided")
+
+    def add(self, embeddings):
+        """Incrementally add a batch of embeddings to the index."""
+        embeddings = np.asarray(embeddings, dtype=np.float32)
+        if embeddings.ndim == 1:
+            embeddings = np.expand_dims(embeddings, axis=0)
+        self.index.add(embeddings)
 
     def save(self, file_path):
         faiss.write_index(self.index, str(file_path))

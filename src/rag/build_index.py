@@ -31,7 +31,7 @@ for env_file in [SRC_DIR / ".env", SAND_ROOT / ".env"]:
 
 
 
-def build_and_benchmark(docs_dir: Path, data_dir: Path, limit: int = None, upload_to_s3: bool = False, batch_size: int = 64):
+def build_and_benchmark(docs_dir: Path, data_dir: Path, limit: int = None, upload_to_s3: bool = False, batch_size: int = 32):
     from ingestion import load_documents_from_directory
     from chunking import chunk_documents
     from embeddings import Embedder
@@ -68,24 +68,46 @@ def build_and_benchmark(docs_dir: Path, data_dir: Path, limit: int = None, uploa
     t_chunk = time.time() - t0
     print(f"[2/4] Generated {len(chunks)} chunks in {t_chunk:.2f}s")
 
-    # 3. Compute Embeddings
-    print(f"[3/4] Computing embeddings for {len(chunks)} chunks using all-MiniLM-L6-v2...")
-    t0 = time.time()
+    # 3. Compute Embeddings & Build Index Incrementally
+    import gc
     embedder = Embedder()
-    texts = [chunk["text"] for chunk in chunks]
-    embeddings = embedder.embed(texts, batch_size=batch_size, show_progress_bar=True)
-    t_embed = time.time() - t0
-    embed_rate = len(chunks) / t_embed if t_embed > 0 else 0
-    print(f"      Completed embeddings in {t_embed:.2f}s ({embed_rate:.1f} chunks/sec)")
+    vector_store = VectorStore(dimension=embedder.dimension)
 
-    # 4. Build and Save FAISS Index
-    print("[4/4] Building FAISS Vector Index and writing to disk...")
+    total_chunks = len(chunks)
+    num_batches = (total_chunks + batch_size - 1) // batch_size
+    print(f"[3/4] Incrementally computing embeddings & building FAISS index for {total_chunks:,} chunks ({num_batches} batches)...")
+    
+    t0 = time.time()
+    for b_idx in range(num_batches):
+        start_idx = b_idx * batch_size
+        end_idx = min(start_idx + batch_size, total_chunks)
+        batch_texts = [chunks[k]["text"] for k in range(start_idx, end_idx)]
+        
+        batch_emb = embedder.embed(batch_texts, batch_size=batch_size, show_progress_bar=False)
+        vector_store.add(batch_emb)
+        del batch_emb
+        del batch_texts
+        
+        # Periodic gc and progress logging every 10 batches or last batch
+        if (b_idx + 1) % 10 == 0 or b_idx == num_batches - 1:
+            gc.collect()
+            elapsed = time.time() - t0
+            pct = (end_idx / total_chunks) * 100
+            rate = end_idx / elapsed if elapsed > 0 else 0
+            eta_sec = (total_chunks - end_idx) / rate if rate > 0 else 0
+            print(f"      Batch {b_idx + 1}/{num_batches} ({pct:.1f}%) | {end_idx:,}/{total_chunks:,} chunks | {rate:.1f} chunks/s | ETA: {int(eta_sec)}s", flush=True)
+
+    t_embed = time.time() - t0
+    embed_rate = total_chunks / t_embed if t_embed > 0 else 0
+    print(f"      Completed embeddings and FAISS index in {t_embed:.2f}s ({embed_rate:.1f} chunks/sec)")
+
+    # 4. Save to Disk
+    print("[4/4] Writing FAISS Vector Index and chunks to disk...")
     t0 = time.time()
     data_dir.mkdir(parents=True, exist_ok=True)
     index_file = data_dir / "index.faiss"
     chunks_file = data_dir / "chunks.json"
 
-    vector_store = VectorStore(embeddings)
     vector_store.save(index_file)
 
     with open(chunks_file, "w", encoding="utf-8") as f:
@@ -137,7 +159,7 @@ def build_and_benchmark(docs_dir: Path, data_dir: Path, limit: int = None, uploa
 def main():
     parser = argparse.ArgumentParser(description="Build and benchmark FAISS vector index")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of documents to index (e.g. 500)")
-    parser.add_argument("--batch-size", type=int, default=64, help="Embedding batch size (default 64)")
+    parser.add_argument("--batch-size", type=int, default=32, help="Embedding batch size (default 32)")
     parser.add_argument("--upload", action="store_true", help="Automatically upload built index to AWS S3")
     args = parser.parse_args()
 

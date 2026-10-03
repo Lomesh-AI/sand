@@ -115,7 +115,7 @@ def build_and_benchmark(docs_dir: Path, data_dir: Path, limit: int = None, uploa
     for q in test_queries:
         t_bench = time.time()
         q_emb = embedder.embed_query(q)
-        scores, ids = vector_store.search(q_emb, k=5)
+        scores, ids = vector_store.search(q_emb, top_k=5)
         dt_ms = (time.time() - t_bench) * 1000
         print(f"  Query: '{q[:40]}...' -> Search Time: {dt_ms:.2f} ms (Top match score: {scores[0]:.4f})")
     print("-" * 65)

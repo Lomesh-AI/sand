@@ -21,7 +21,9 @@ class VectorStore:
         index = faiss.read_index(str(file_path))
         return cls(index=index)
     
-    def search(self, query_embedding, top_k=5):
+    def search(self, query_embedding, top_k=5, k=None):
+        if k is not None:
+            top_k = k
         top_k = min(top_k, self.index.ntotal)
         if top_k == 0:
             return np.array([], dtype=np.float32), np.array([], dtype=np.int64)

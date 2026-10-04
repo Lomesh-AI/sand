@@ -204,8 +204,21 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
                 "Address all parts of the user's request thoroughly using the specialist findings above. Cite all relevant documents, ADRs, or repository findings. Write in clean markdown text."
             )
         )
-        response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
-        return {"messages": [response], "next_step": "FINISH", "visited_specialists": []}
+        try:
+            response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
+            return {"messages": [response], "next_step": "FINISH", "visited_specialists": []}
+        except Exception as e:
+            err_str = str(e).lower()
+            if "tool choice is none" in err_str or "tool_use_failed" in err_str:
+                print("[supervisor] Caught Groq tool_use_failed in synthesis, returning findings directly", flush=True)
+                fallback_msg = AIMessage(
+                    content=(
+                        "## Engineering Synthesis\n\n"
+                        f"{context_str}\n"
+                    )
+                )
+                return {"messages": [fallback_msg], "next_step": "FINISH", "visited_specialists": []}
+            raise
 
     # Clean dialog history for supervisor routing (avoids Groq tool_use conflicts)
     dialog_history = _clean_dialog_history(state["messages"])
@@ -301,11 +314,27 @@ async def docs_specialist_node(state: TeamState, config: RunnableConfig = None) 
                 "Cite sources properly (e.g. [SOURCE: docs/...]). Write in clean markdown text. Do not make any tool calls."
             )
         )
-        response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
-        return {
-            "messages": [response],
-            "visited_specialists": visited,
-        }
+        try:
+            response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
+            return {
+                "messages": [response],
+                "visited_specialists": visited,
+            }
+        except Exception as e:
+            err_str = str(e).lower()
+            if "tool choice is none" in err_str or "tool_use_failed" in err_str:
+                print("[docs_specialist] Caught Groq tool_use_failed, using direct markdown context fallback", flush=True)
+                fallback_msg = AIMessage(
+                    content=(
+                        "### Architecture & Documentation Findings\n\n"
+                        f"{context_str}\n"
+                    )
+                )
+                return {
+                    "messages": [fallback_msg],
+                    "visited_specialists": visited,
+                }
+            raise
 
     # Initial turn: bind tools to let specialist query documentation
     docs_llm = llm.bind_tools(DOCS_TOOLS)
@@ -352,21 +381,41 @@ async def github_specialist_node(state: TeamState, config: RunnableConfig = None
         synthesis_prompt = SystemMessage(
             content=(
                 "You are the Senior GitHub & Codebase Specialist.\n"
+                "Your role in this step is to summarize the GitHub findings that were ALREADY retrieved.\n"
+                "DO NOT attempt to call any tools, open files, or browse repositories. You do NOT have tool access in this step.\n"
                 "Below is the data retrieved from GitHub tools:\n"
                 "--------------------\n"
                 f"{context_str}\n"
                 "--------------------\n"
-                "Synthesize the findings into a clear, precise, and actionable engineering response for the user.\n"
-                "Focus strictly on reporting your GitHub findings (e.g. pull requests, issues, files). Do not speculate on or apologize for documentation or guidelines, as another specialist handles documentation.\n"
-                "If a repository or file was not found (404) or an error occurred, explain the issue clearly without retrying.\n"
-                "Write in clean markdown text. Do not make any tool calls."
+                "Synthesize and present the repository files, directory structure, or GitHub findings retrieved above in clean markdown text.\n"
+                "Focus strictly on reporting your GitHub findings. Another specialist handles documentation and architecture."
             )
         )
-        response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
-        return {
-            "messages": [response],
-            "visited_specialists": visited,
-        }
+        try:
+            response = await llm.ainvoke(
+                [synthesis_prompt, HumanMessage(content=f"Report the repository findings for: {user_query}. Present the files found in a clean markdown table or list.")],
+                config=config,
+            )
+            return {
+                "messages": [response],
+                "visited_specialists": visited,
+            }
+        except Exception as e:
+            err_str = str(e).lower()
+            if "tool choice is none" in err_str or "tool_use_failed" in err_str or "repo_browser" in err_str:
+                print("[github_specialist] Caught Groq tool_use_failed, using direct markdown context fallback", flush=True)
+                fallback_msg = AIMessage(
+                    content=(
+                        "### GitHub Repository Findings\n\n"
+                        "Below are the files and structures identified in the repository:\n\n"
+                        f"{context_str}\n"
+                    )
+                )
+                return {
+                    "messages": [fallback_msg],
+                    "visited_specialists": visited,
+                }
+            raise
 
     # Initial turn: bind tools to query GitHub
     github_llm = llm.bind_tools(GITHUB_TOOLS)

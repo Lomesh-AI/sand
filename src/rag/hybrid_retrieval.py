@@ -8,13 +8,17 @@ class HybridRetrieval:
         self.embedder = embedder
         self.chunks = chunks
 
-    def search(self, query_text, top_k=5, alpha=0.5):
+    def search(self, query_text, top_k=5, alpha=0.5, hypothetical_doc=None):
         top_k = min(top_k, len(self.chunks))
         if top_k == 0:
             return []
         
-        query_embedding = self.embedder.embed_query(query_text)
+        # Dense semantic search: use hypothetical passage (HyDE) if provided, otherwise raw query
+        dense_query = hypothetical_doc if hypothetical_doc else query_text
+        query_embedding = self.embedder.embed_query(dense_query)
         semantic_scores, semantic_indices = self.vector_store.search(query_embedding, top_k=top_k)
+        
+        # Sparse keyword search: always use original user query to preserve exact keyword matching
         bm25_results = self.bm25_store.search(query_text, top_k=top_k)
 
         semantic = np.zeros(len(self.chunks))

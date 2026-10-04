@@ -12,6 +12,7 @@ from vector_search import VectorStore
 from bm25_store import BM25Store
 from hybrid_retrieval import HybridRetrieval
 from reranker import Reranker
+from hyde import HyDEGenerator
 
 
 from s3_storage import S3RAGStorage
@@ -68,15 +69,24 @@ class RAGPipeline:
             self.chunks,
         )
         self.reranker = Reranker()
+        self.hyde_generator = HyDEGenerator()
 
-    def search(self, query, k=5):
+    def search(self, query, k=5, use_hyde=True):
+        hypo_doc = None
+        if use_hyde and self.hyde_generator:
+            hypo_doc = self.hyde_generator.generate_hypothetical_document(query)
+            if hypo_doc:
+                print(f"[RAGPipeline] HyDE generated passage for query: {query!r}", flush=True)
+
         candidates = self.hybrid_retriever.search(
             query,
             top_k=10,
             alpha=0.5,
+            hypothetical_doc=hypo_doc,
         )
 
         indices = [idx for _, idx in candidates]
+        # Always rerank against the raw user query to prevent hallucination drift
         return self.reranker.rerank(
             query,
             self.chunks,

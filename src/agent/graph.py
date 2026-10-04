@@ -60,6 +60,7 @@ def _get_base_llm():
         base_url="https://api.groq.com/openai/v1",
         temperature=0.0,
         max_retries=5,
+        max_completion_tokens=4096
     )
 
 
@@ -215,8 +216,8 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
             "Review the conversation history and the latest user request to make a routing decision.\n"
             "Call one of the available delegation tools:\n"
             "- Call 'github_specialist' if the query or follow-up refers to code, repositories, pull requests, issues, or 'the above repo'.\n"
-            "- Call 'docs_specialist' if the query or follow-up is about architecture, decisions (ADRs), or docs.\n"
-            "- Call 'finish_conversation' if the query is a simple greeting or general question requiring no external tools."
+            "- Call 'docs_specialist' if the query or follow-up is about architecture, decisions (ADRs), infrastructure, containerization, Docker, Kubernetes, or docs.\n"
+            "- Call 'finish_conversation' if the query is a simple greeting or general chit-chat requiring no external tools."
         )
     )
 
@@ -244,7 +245,7 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
             user_msg = state["messages"][-1].content.lower() if state["messages"] else ""
             if any(k in user_msg for k in ["file", "repo", "pr", "pull", "issue", "commit", "branch", "github"]):
                 next_step = "github_specialist"
-            elif any(k in user_msg for k in ["doc", "adr", "architecture", "decision", "runbook"]):
+            elif any(k in user_msg for k in ["doc", "adr", "architecture", "decision", "runbook", "guideline", "deployment", "kubernetes", "docker", "container", "cloud"]):
                 next_step = "docs_specialist"
             else:
                 next_step = "FINISH"

@@ -204,21 +204,8 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
                 "Address all parts of the user's request thoroughly using the specialist findings above. Cite all relevant documents, ADRs, or repository findings. Write in clean markdown text."
             )
         )
-        try:
-            response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
-            return {"messages": [response], "next_step": "FINISH", "visited_specialists": []}
-        except Exception as e:
-            err_str = str(e).lower()
-            if "tool choice is none" in err_str or "tool_use_failed" in err_str:
-                print("[supervisor] Caught Groq tool_use_failed in synthesis, returning findings directly", flush=True)
-                fallback_msg = AIMessage(
-                    content=(
-                        "## Engineering Synthesis\n\n"
-                        f"{context_str}\n"
-                    )
-                )
-                return {"messages": [fallback_msg], "next_step": "FINISH", "visited_specialists": []}
-            raise
+        response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
+        return {"messages": [response], "next_step": "FINISH", "visited_specialists": []}
 
     # Clean dialog history for supervisor routing (avoids Groq tool_use conflicts)
     dialog_history = _clean_dialog_history(state["messages"])
@@ -248,20 +235,14 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
             # Model answered directly
             return {"messages": [decision_msg], "next_step": "FINISH", "visited_specialists": []}
     except Exception as e:
-        err_str = str(e).lower()
         print(f"[supervisor] Router error: {e}", flush=True)
-        if "github" in err_str:
+        user_msg = state["messages"][-1].content.lower() if state["messages"] else ""
+        if any(k in user_msg for k in ["file", "repo", "pr", "pull", "issue", "commit", "branch", "github"]):
             next_step = "github_specialist"
-        elif "doc" in err_str:
+        elif any(k in user_msg for k in ["doc", "adr", "architecture", "decision", "runbook", "guideline", "deployment", "kubernetes", "docker", "container", "cloud"]):
             next_step = "docs_specialist"
         else:
-            user_msg = state["messages"][-1].content.lower() if state["messages"] else ""
-            if any(k in user_msg for k in ["file", "repo", "pr", "pull", "issue", "commit", "branch", "github"]):
-                next_step = "github_specialist"
-            elif any(k in user_msg for k in ["doc", "adr", "architecture", "decision", "runbook", "guideline", "deployment", "kubernetes", "docker", "container", "cloud"]):
-                next_step = "docs_specialist"
-            else:
-                next_step = "FINISH"
+            next_step = "FINISH"
 
     print(f"[supervisor] Next step: {next_step}", flush=True)
 
@@ -287,66 +268,17 @@ async def docs_specialist_node(state: TeamState, config: RunnableConfig = None) 
     if "docs_specialist" not in visited:
         visited.append("docs_specialist")
 
-    DOCS_TOOL_NAMES = {t.name for t in DOCS_TOOLS}
-    turn_messages = _get_current_turn_messages(state["messages"])
-    tool_messages = [m for m in turn_messages if isinstance(m, ToolMessage) and getattr(m, "name", None) in DOCS_TOOL_NAMES]
-
-    # If tools have executed in this turn for docs, synthesize the findings without further tool calls
-    if tool_messages:
-        user_query = ""
-        retrieved_contexts = []
-        for m in turn_messages:
-            if isinstance(m, HumanMessage):
-                user_query = m.content
-            elif isinstance(m, ToolMessage) and getattr(m, "name", None) in DOCS_TOOL_NAMES:
-                retrieved_contexts.append(str(m.content))
-
-        context_str = "\n\n".join(retrieved_contexts)
-        synthesis_prompt = SystemMessage(
-            content=(
-                "You are the Senior Architecture & Documentation Specialist.\n"
-                "Below is the information retrieved from documentation tools:\n"
-                "--------------------\n"
-                f"{context_str}\n"
-                "--------------------\n"
-                "Provide a comprehensive, professional, and well-structured engineering response answering the user question based strictly on the retrieved documentation.\n"
-                "Focus strictly on reporting your documentation findings. Do not speculate on or apologize for code or pull requests, as another specialist handles GitHub.\n"
-                "Cite sources properly (e.g. [SOURCE: docs/...]). Write in clean markdown text. Do not make any tool calls."
-            )
-        )
-        try:
-            response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
-            return {
-                "messages": [response],
-                "visited_specialists": visited,
-            }
-        except Exception as e:
-            err_str = str(e).lower()
-            if "tool choice is none" in err_str or "tool_use_failed" in err_str:
-                print("[docs_specialist] Caught Groq tool_use_failed, using direct markdown context fallback", flush=True)
-                fallback_msg = AIMessage(
-                    content=(
-                        "### Architecture & Documentation Findings\n\n"
-                        f"{context_str}\n"
-                    )
-                )
-                return {
-                    "messages": [fallback_msg],
-                    "visited_specialists": visited,
-                }
-            raise
-
-    # Initial turn: bind tools to let specialist query documentation
     docs_llm = llm.bind_tools(DOCS_TOOLS)
     system_msg = SystemMessage(
         content=(
             f"{DOCS_SPECIALIST_PROMPT}\n\n"
-            "Select the most appropriate tool to search or read documentation for the user query."
+            "Investigate the user query using the available documentation tools. "
+            "Once you have gathered the required findings, synthesize a clear, comprehensive response in markdown."
         )
     )
 
-    dialog_history = _clean_dialog_history(state["messages"])
-    response = await docs_llm.ainvoke([system_msg] + dialog_history, config=config)
+    turn_messages = _get_current_turn_messages(state["messages"])
+    response = await docs_llm.ainvoke([system_msg] + turn_messages, config=config)
 
     return {
         "messages": [response],
@@ -363,72 +295,17 @@ async def github_specialist_node(state: TeamState, config: RunnableConfig = None
     if "github_specialist" not in visited:
         visited.append("github_specialist")
 
-    GITHUB_TOOL_NAMES = {t.name for t in GITHUB_TOOLS}
-    turn_messages = _get_current_turn_messages(state["messages"])
-    tool_messages = [m for m in turn_messages if isinstance(m, ToolMessage) and getattr(m, "name", None) in GITHUB_TOOL_NAMES]
-
-    # If tool executed in this turn for github, synthesize response
-    if tool_messages:
-        user_query = ""
-        retrieved_contexts = []
-        for m in turn_messages:
-            if isinstance(m, HumanMessage):
-                user_query = m.content
-            elif isinstance(m, ToolMessage) and getattr(m, "name", None) in GITHUB_TOOL_NAMES:
-                retrieved_contexts.append(str(m.content))
-
-        context_str = "\n\n".join(retrieved_contexts)
-        synthesis_prompt = SystemMessage(
-            content=(
-                "You are the Senior GitHub & Codebase Specialist.\n"
-                "Your role in this step is to summarize the GitHub findings that were ALREADY retrieved.\n"
-                "DO NOT attempt to call any tools, open files, or browse repositories. You do NOT have tool access in this step.\n"
-                "Below is the data retrieved from GitHub tools:\n"
-                "--------------------\n"
-                f"{context_str}\n"
-                "--------------------\n"
-                "Synthesize and present the repository files, directory structure, or GitHub findings retrieved above in clean markdown text.\n"
-                "Focus strictly on reporting your GitHub findings. Another specialist handles documentation and architecture."
-            )
-        )
-        try:
-            response = await llm.ainvoke(
-                [synthesis_prompt, HumanMessage(content=f"Report the repository findings for: {user_query}. Present the files found in a clean markdown table or list.")],
-                config=config,
-            )
-            return {
-                "messages": [response],
-                "visited_specialists": visited,
-            }
-        except Exception as e:
-            err_str = str(e).lower()
-            if "tool choice is none" in err_str or "tool_use_failed" in err_str or "repo_browser" in err_str:
-                print("[github_specialist] Caught Groq tool_use_failed, using direct markdown context fallback", flush=True)
-                fallback_msg = AIMessage(
-                    content=(
-                        "### GitHub Repository Findings\n\n"
-                        "Below are the files and structures identified in the repository:\n\n"
-                        f"{context_str}\n"
-                    )
-                )
-                return {
-                    "messages": [fallback_msg],
-                    "visited_specialists": visited,
-                }
-            raise
-
-    # Initial turn: bind tools to query GitHub
     github_llm = llm.bind_tools(GITHUB_TOOLS)
     system_msg = SystemMessage(
         content=(
             f"{GITHUB_SPECIALIST_PROMPT}\n\n"
-            "Select the most appropriate tool to inspect the repository or code for the user query.\n"
-            "If the user refers to an earlier repository or context from the conversation history (e.g. 'the above repo'), resolve the repository owner and name from the prior messages."
+            "Inspect the repository or codebase for the user query using the available tools. "
+            "Once repository findings are collected, present a clear, structured summary in clean markdown."
         )
     )
 
-    dialog_history = _clean_dialog_history(state["messages"])
-    response = await github_llm.ainvoke([system_msg] + dialog_history, config=config)
+    turn_messages = _get_current_turn_messages(state["messages"])
+    response = await github_llm.ainvoke([system_msg] + turn_messages, config=config)
 
     return {
         "messages": [response],

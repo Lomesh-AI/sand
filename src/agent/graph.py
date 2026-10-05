@@ -115,6 +115,30 @@ def _clean_dialog_history(messages: list) -> list:
     return cleaned
 
 
+def _sanitize_tool_content(content: str) -> str:
+    """Sanitize raw tool messages into plain text so external LLMs don't mistake them for code-interpreter tokens."""
+    lines = []
+    for line in str(content).splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("[PATH:") and line.endswith("]"):
+            path = line[len("[PATH:"): -1].strip()
+            lines.append(f"- File: {path}")
+        elif line.startswith("[URL:") and line.endswith("]"):
+            continue
+        elif line.startswith("[TYPE:"):
+            continue
+        elif line.startswith("[SOURCE:") and line.endswith("]"):
+            source = line[len("[SOURCE:"): -1].strip()
+            lines.append(f"Source: {source}")
+        elif line.startswith("[RELEVANCE:"):
+            continue
+        else:
+            lines.append(line)
+    return "\n".join(lines)
+
+
 # --- Supervisor Delegation Tools ---
 
 @tool
@@ -163,8 +187,8 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
                 break
 
         # Check for compound query requiring both specialists
-        needs_docs = any(k in user_msg for k in ["doc", "adr", "architecture", "decision", "runbook", "guideline", "deployment", "kubernetes", "cloud"])
-        needs_github = any(k in user_msg for k in ["pr", "pull request", "issue", "commit", "branch", "repo", "github", "code"])
+        needs_docs = any(k in user_msg for k in ["doc", "adr", "architecture", "decision", "runbook", "guideline", "deployment", "kubernetes", "cloud", "docker", "container"])
+        needs_github = any(k in user_msg for k in ["pr", "pull request", "issue", "commit", "branch", "repo", "github", "code", "file"])
 
         # If a second specialist is needed and hasn't run yet, delegate to them
         if needs_docs and "docs_specialist" not in visited:
@@ -188,23 +212,35 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
             if isinstance(m, HumanMessage):
                 user_query = m.content
             elif isinstance(m, AIMessage) and m.content and not getattr(m, "tool_calls", None):
-                findings.append(m.content)
+                findings.append(f"Specialist Report:\n{m.content.strip()}")
             elif isinstance(m, ToolMessage):
-                findings.append(str(m.content))
+                cleaned_tool = _sanitize_tool_content(m.content)
+                if cleaned_tool.strip():
+                    findings.append(f"Tool Data:\n{cleaned_tool.strip()}")
 
         context_str = "\n\n".join(findings)
         synthesis_prompt = SystemMessage(
             content=(
                 "You are the Lead Engineering Orchestrator.\n"
-                "The specialist investigation for the current query is complete. Below are the findings collected:\n"
+                "All specialist investigations (codebase inspection, architecture retrieval, etc.) for the current query are COMPLETE.\n"
+                "Below are the verified findings collected by your team:\n"
                 "--------------------\n"
                 f"{context_str}\n"
                 "--------------------\n"
-                "Synthesize the findings into a clear, professional, and well-structured engineering response. "
-                "Address all parts of the user's request thoroughly using the specialist findings above. Cite all relevant documents, ADRs, or repository findings. Write in clean markdown text."
+                "Your role is ONLY to synthesize these findings into a final, professional, and well-structured engineering response.\n"
+                "CRITICAL INSTRUCTIONS:\n"
+                "- Do NOT attempt to call any tools, functions, or inspect additional files. You do NOT have tool access.\n"
+                "- Base your answer strictly on the findings provided above. If a repository lacks certain files (e.g., Dockerfiles), state that clearly based on the file listing.\n"
+                "- Output ONLY clean, user-facing Markdown text. Do NOT output JSON, function call syntax, or code-interpreter commands."
             )
         )
-        response = await llm.ainvoke([synthesis_prompt, HumanMessage(content=user_query)], config=config)
+        synth_user_msg = HumanMessage(
+            content=(
+                f"Please synthesize the final response to the user's inquiry: \"{user_query}\"\n"
+                "Use the specialist investigation findings provided in the system prompt to deliver a complete and structured answer."
+            )
+        )
+        response = await llm.ainvoke([synthesis_prompt, synth_user_msg], config=config)
         return {"messages": [response], "next_step": "FINISH", "visited_specialists": []}
 
     # Clean dialog history for supervisor routing (avoids Groq tool_use conflicts)
@@ -250,7 +286,8 @@ async def supervisor_node(state: TeamState, config: RunnableConfig = None) -> di
         synthesis_prompt = SystemMessage(
             content=(
                 f"{SUPERVISOR_SYSTEM_PROMPT}\n\n"
-                "Provide a comprehensive, direct, and well-structured response to the user based on the conversation."
+                "Provide a comprehensive, direct, and well-structured response to the user based on the conversation.\n"
+                "You do NOT have tool access. Output clean Markdown text only; do not output JSON or tool calls."
             )
         )
         response = await llm.ainvoke([synthesis_prompt] + dialog_history, config=config)

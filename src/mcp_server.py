@@ -198,13 +198,17 @@ async def search_github(owner: str, repo: str, query: str) -> str:
     return "\n\n".join(matches)
 
 @server.tool()
-def list_github_files(owner: str, repo: str) -> str:
+def list_github_files(owner: str, repo: str, path: str = "") -> str:
     """
-    List files in the root of a GitHub repository.
+    List files in a GitHub repository directory (default is root "").
     """
     try:
         repository = github_client.get_repo(f"{owner}/{repo}")
-        contents = repository.get_contents("")
+        target_path = path.strip() if path else ""
+        contents = repository.get_contents(target_path)
+
+        if not isinstance(contents, list):
+            contents = [contents]
 
         files = []
         for item in contents:

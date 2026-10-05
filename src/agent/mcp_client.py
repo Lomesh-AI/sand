@@ -111,10 +111,13 @@ class MCPClient:
         )
         return result.content[0].text
 
-    async def list_github_files(self, owner: str, repo: str) -> str:
+    async def list_github_files(self, owner: str, repo: str, path: str = "") -> str:
+        args = {"owner": owner, "repo": repo}
+        if path:
+            args["path"] = path
         result = await self.session.call_tool(
             "list_github_files",
-            {"owner": owner, "repo": repo},
+            args,
         )
         return result.content[0].text
 

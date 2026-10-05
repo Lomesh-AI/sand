@@ -100,11 +100,11 @@ async def search_github(
     return await mcp_client.search_github(owner, repo, query)
 
 @tool
-async def list_github_files(owner: str, repo: str) -> str:
+async def list_github_files(owner: str, repo: str, path: str = "") -> str:
     """
-    List all files in a specific GitHub repository.
+    List files in a specific GitHub repository directory (default is root "").
     """
-    return await mcp_client.list_github_files(owner, repo)
+    return await mcp_client.list_github_files(owner, repo, path)
 
 @tool
 async def list_github_issues(owner: str, repo: str) -> str:

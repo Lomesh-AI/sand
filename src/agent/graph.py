@@ -139,6 +139,49 @@ def _sanitize_tool_content(content: str) -> str:
     return "\n".join(lines)
 
 
+def _filter_specialist_messages(messages: list, allowed_tool_names: set) -> list:
+    """
+    Returns an isolated message history for a specialist agent:
+    - Retains the user's HumanMessage for the current turn.
+    - Retains AIMessages and ToolMessages that belong strictly to allowed_tool_names
+      (preserving the specialist's own multi-turn ReAct loop).
+    - If another specialist produced findings earlier in this turn, summarizes
+      them as clean text context so the specialist is informed without tool-schema pollution.
+    """
+    turn_messages = _get_current_turn_messages(messages)
+    filtered = []
+    prior_findings = []
+
+    for m in turn_messages:
+        if isinstance(m, HumanMessage):
+            filtered.append(m)
+        elif isinstance(m, ToolMessage):
+            if getattr(m, "name", None) in allowed_tool_names:
+                filtered.append(m)
+            else:
+                # Prior tool output from another specialist - clean it for context
+                cleaned = _sanitize_tool_content(m.content)
+                if cleaned.strip():
+                    prior_findings.append(cleaned.strip())
+        elif isinstance(m, AIMessage):
+            tool_calls = getattr(m, "tool_calls", None)
+            if tool_calls:
+                # Keep only if these tool calls belong to the current specialist
+                if any(tc.get("name") in allowed_tool_names for tc in tool_calls):
+                    filtered.append(m)
+            elif m.content and isinstance(m.content, str) and m.content.strip():
+                # Text output from another specialist or earlier turn
+                prior_findings.append(m.content.strip())
+
+    if prior_findings:
+        context_note = SystemMessage(
+            content=f"Context from prior specialist investigation:\n" + "\n".join(prior_findings[:3])
+        )
+        filtered.insert(1, context_note)
+
+    return filtered
+
+
 # --- Supervisor Delegation Tools ---
 
 @tool
@@ -314,7 +357,7 @@ async def docs_specialist_node(state: TeamState, config: RunnableConfig = None) 
         )
     )
 
-    turn_messages = _get_current_turn_messages(state["messages"])
+    turn_messages = _filter_specialist_messages(state["messages"], {t.name for t in DOCS_TOOLS})
     response = await docs_llm.ainvoke([system_msg] + turn_messages, config=config)
 
     return {
@@ -341,7 +384,7 @@ async def github_specialist_node(state: TeamState, config: RunnableConfig = None
         )
     )
 
-    turn_messages = _get_current_turn_messages(state["messages"])
+    turn_messages = _filter_specialist_messages(state["messages"], {t.name for t in GITHUB_TOOLS})
     response = await github_llm.ainvoke([system_msg] + turn_messages, config=config)
 
     return {

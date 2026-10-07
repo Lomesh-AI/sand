@@ -110,6 +110,42 @@ class S3RAGStorage:
 
         return success_count == len(files_to_download)
 
+    def download_turbovec_assets(self, target_dir: Path, bit_width: int = 4) -> bool:
+        """
+        Download turbovec index file (index_turbovec_{bit_width}bit.tq)
+        and turbovec_manifest.json from S3 into target_dir.
+        """
+        if not self.is_enabled:
+            return False
+
+        client = self.get_client()
+        if not client:
+            return False
+
+        target_dir = Path(target_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        target_file = f"index_turbovec_{bit_width}bit.tq"
+        files_to_download = [target_file, "turbovec_manifest.json", "chunks.json"]
+        success_count = 0
+
+        for filename in files_to_download:
+            s3_key = f"{self.prefix}/{filename}" if self.prefix else filename
+            local_path = target_dir / filename
+
+            try:
+                print(f"[S3RAGStorage] Downloading s3://{self.bucket_name}/{s3_key} -> {local_path}...", file=sys.stderr, flush=True)
+                client.download_file(self.bucket_name, s3_key, str(local_path))
+                if local_path.exists() and local_path.stat().st_size > 0:
+                    success_count += 1
+            except ClientError as exc:
+                code = exc.response.get("Error", {}).get("Code", "Unknown")
+                print(f"[S3RAGStorage] S3 download skipped for {s3_key} (Error {code})", file=sys.stderr, flush=True)
+            except Exception as exc:
+                print(f"[S3RAGStorage] Failed to download {s3_key}: {exc}", file=sys.stderr, flush=True)
+
+        return success_count >= 1
+
     def upload_assets(self, source_dir: Path) -> bool:
         """
         Upload local index.faiss and chunks.json from source_dir to S3.
@@ -146,3 +182,40 @@ class S3RAGStorage:
                 print(f"[S3RAGStorage] Failed to upload {filename} to S3: {exc}", file=sys.stderr, flush=True)
 
         return success_count == len(files_to_upload)
+
+    def upload_turbovec_assets(self, source_dir: Path) -> bool:
+        """
+        Upload local TurboVec indices (.tq) and turbovec_manifest.json to S3.
+        """
+        if not self.is_enabled:
+            print("[S3RAGStorage] S3 upload skipped: RAG_S3_BUCKET is not set.", file=sys.stderr, flush=True)
+            return False
+
+        client = self.get_client()
+        if not client:
+            return False
+
+        source_dir = Path(source_dir)
+        turbovec_files = list(source_dir.glob("index_turbovec_*.tq"))
+        manifest_file = source_dir / "turbovec_manifest.json"
+        if manifest_file.exists():
+            turbovec_files.append(manifest_file)
+
+        if not turbovec_files:
+            print(f"[S3RAGStorage] No TurboVec (.tq) files found in {source_dir}.", file=sys.stderr, flush=True)
+            return False
+
+        success_count = 0
+        for local_path in turbovec_files:
+            filename = local_path.name
+            s3_key = f"{self.prefix}/{filename}" if self.prefix else filename
+            try:
+                print(f"[S3RAGStorage] Uploading {local_path} -> s3://{self.bucket_name}/{s3_key}...", flush=True)
+                client.upload_file(str(local_path), self.bucket_name, s3_key)
+                print(f"[S3RAGStorage] Successfully uploaded {filename} to S3.", flush=True)
+                success_count += 1
+            except Exception as exc:
+                print(f"[S3RAGStorage] Failed to upload {filename}: {exc}", file=sys.stderr, flush=True)
+
+        return success_count == len(turbovec_files)
+

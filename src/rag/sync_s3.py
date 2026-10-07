@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import os
 from pathlib import Path
 import sys
 
@@ -50,6 +51,11 @@ def check_status(s3: S3RAGStorage, cache_dir: Path):
     print("Local Assets in", cache_dir)
     print(f"  index.faiss: {'EXISTS (' + str(index_file.stat().st_size) + ' bytes)' if index_file.exists() else 'MISSING'}")
     print(f"  chunks.json: {'EXISTS (' + str(chunks_file.stat().st_size) + ' bytes)' if chunks_file.exists() else 'MISSING'}")
+    for tq_file in cache_dir.glob("index_turbovec_*.tq"):
+        print(f"  {tq_file.name}: EXISTS ({tq_file.stat().st_size} bytes)")
+    manifest_file = cache_dir / "turbovec_manifest.json"
+    if manifest_file.exists():
+        print(f"  turbovec_manifest.json: EXISTS ({manifest_file.stat().st_size} bytes)")
     print("-" * 60)
 
     # Remote S3 Files
@@ -80,13 +86,18 @@ def main():
     parser.add_argument("--status", action="store_true", help="Check local and S3 storage status")
     parser.add_argument("--upload", action="store_true", help="Upload local index.faiss and chunks.json to S3")
     parser.add_argument("--download", action="store_true", help="Download index.faiss and chunks.json from S3")
+    parser.add_argument("--upload-turbovec", action="store_true", help="Upload local TurboVec (.tq) indices to S3")
+    parser.add_argument("--download-turbovec", action="store_true", help="Download TurboVec (.tq) index from S3")
+    parser.add_argument("--bit-width", type=int, default=4, choices=[2, 3, 4], help="TurboVec bit width (default: 4)")
+    parser.add_argument("--dir", type=str, default=None, help="Local directory to sync (default: data or data_s3)")
     parser.add_argument("--build-and-upload", action="store_true", help="Build vector store from docs and upload to S3")
     parser.add_argument("--bucket", type=str, default=None, help="Override target S3 bucket name")
     parser.add_argument("--prefix", type=str, default="rag", help="S3 prefix (folder)")
 
     args = parser.parse_args()
 
-    cache_dir = SAND_ROOT / "data"
+    default_dir = (SAND_ROOT / args.dir) if args.dir else (SAND_ROOT / "data_s3" if (SAND_ROOT / "data_s3").exists() else SAND_ROOT / "data")
+    cache_dir = default_dir
     s3 = S3RAGStorage(bucket_name=args.bucket, prefix=args.prefix)
 
     if args.upload:
@@ -100,6 +111,17 @@ def main():
         else:
             print("[FAILED] Failed to upload some or all assets to AWS S3.")
 
+    elif args.upload_turbovec:
+        if not s3.is_enabled:
+            print("[ERROR] Please provide --bucket or set RAG_S3_BUCKET in .env before uploading.")
+            sys.exit(1)
+        print(f"Uploading TurboVec assets from {cache_dir} to s3://{s3.bucket_name}/{s3.prefix}...")
+        ok = s3.upload_turbovec_assets(cache_dir)
+        if ok:
+            print("[SUCCESS] TurboVec assets uploaded to AWS S3 successfully!")
+        else:
+            print("[FAILED] Failed to upload TurboVec assets to AWS S3.")
+
     elif args.download:
         if not s3.is_enabled:
             print("[ERROR] Please provide --bucket or set RAG_S3_BUCKET in .env before downloading.")
@@ -110,6 +132,17 @@ def main():
             print("[SUCCESS] All RAG assets downloaded from AWS S3 successfully!")
         else:
             print("[FAILED] Failed to download assets from AWS S3.")
+
+    elif args.download_turbovec:
+        if not s3.is_enabled:
+            print("[ERROR] Please provide --bucket or set RAG_S3_BUCKET in .env before downloading.")
+            sys.exit(1)
+        print(f"Downloading TurboVec {args.bit_width}-bit assets from s3://{s3.bucket_name}/{s3.prefix} to {cache_dir}...")
+        ok = s3.download_turbovec_assets(cache_dir, bit_width=args.bit_width)
+        if ok:
+            print("[SUCCESS] TurboVec assets downloaded from AWS S3 successfully!")
+        else:
+            print("[FAILED] Failed to download TurboVec assets from AWS S3.")
 
     elif args.build_and_upload:
         print("Rebuilding RAG pipeline from docs/...")
@@ -129,3 +162,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

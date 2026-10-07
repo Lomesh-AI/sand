@@ -1,0 +1,58 @@
+[
+  {
+    "name": "FAISS (FlatIP - float32)",
+    "bit_width": 32,
+    "build_time_sec": 0.0,
+    "file_size_mb": 53.27,
+    "compression_ratio": "1.0x (Baseline)",
+    "mean_latency_ms": 2.781,
+    "p50_latency_ms": 2.592,
+    "p90_latency_ms": 3.501,
+    "p95_latency_ms": 4.349,
+    "p99_latency_ms": 4.8,
+    "qps": 359.6,
+    "recall_at_10": 100.0
+  },
+  {
+    "name": "TurboVec (4-bit TurboQuant)",
+    "bit_width": 4,
+    "build_time_sec": 0.44,
+    "file_size_mb": 7.21,
+    "compression_ratio": "7.39x",
+    "mean_latency_ms": 0.619,
+    "p50_latency_ms": 0.259,
+    "p90_latency_ms": 0.67,
+    "p95_latency_ms": 1.006,
+    "p99_latency_ms": 6.214,
+    "qps": 1615.2,
+    "recall_at_10": 75.5
+  },
+  {
+    "name": "TurboVec (3-bit TurboQuant)",
+    "bit_width": 3,
+    "build_time_sec": 0.36,
+    "file_size_mb": 7.21,
+    "compression_ratio": "7.39x",
+    "mean_latency_ms": 0.482,
+    "p50_latency_ms": 0.446,
+    "p90_latency_ms": 0.615,
+    "p95_latency_ms": 0.699,
+    "p99_latency_ms": 1.007,
+    "qps": 2072.6,
+    "recall_at_10": 76.3
+  },
+  {
+    "name": "TurboVec (2-bit TurboQuant)",
+    "bit_width": 2,
+    "build_time_sec": 0.17,
+    "file_size_mb": 3.69,
+    "compression_ratio": "14.45x",
+    "mean_latency_ms": 0.881,
+    "p50_latency_ms": 0.358,
+    "p90_latency_ms": 0.765,
+    "p95_latency_ms": 0.956,
+    "p99_latency_ms": 11.503,
+    "qps": 1134.7,
+    "recall_at_10": 60.1
+  }
+]

@@ -3,3 +3,4 @@
 data/
 *.pyc
 *.exe
+data_s3/

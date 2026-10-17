@@ -57,6 +57,12 @@ async def lifespan(app: FastAPI):
     print("MCP client connecting...")
     await mcp_client.connect()
     print("MCP session after startup:", mcp_client.session)
+    try:
+        from agent.memory import init_postgres_tables
+        await init_postgres_tables()
+        print("AWS RDS PostgreSQL schema ready.")
+    except Exception as e:
+        print("Notice: PostgreSQL init skipped:", e)
     yield
     print("MCP client closing...")
     await mcp_client.close()
@@ -95,6 +101,21 @@ async def health():
     }
 
 
+@app.get("/conversations")
+async def list_conversations(limit: int = 20):
+    """Retrieve past conversation sessions stored in AWS RDS PostgreSQL."""
+    from agent.memory import list_past_conversations
+    return await list_past_conversations(limit=limit)
+
+
+@app.get("/conversations/{thread_id}")
+async def get_conversation(thread_id: str):
+    """Retrieve full conversation turn history for a given thread."""
+    from agent.memory import get_thread_history
+    return await get_thread_history(thread_id=thread_id)
+
+
+
 class ChatRequest(BaseModel):
     message: str
     thread_id: str | None = None
@@ -130,6 +151,11 @@ async def chat(request: ChatRequest):
     }
 
     async def event_generator():
+        import time
+        start_time = time.perf_counter()
+        final_answer = ""
+        visited_specialists = []
+        tools_called = []
         print("Event generator started:", thread_id)
         try:
             async for event in graph.astream(
@@ -155,8 +181,11 @@ async def chat(request: ChatRequest):
                         agent_labels = {
                             "docs_specialist": "Documentation & Architecture Specialist",
                             "github_specialist": "GitHub & Codebase Specialist",
+                            "general_specialist": "General & Utilities Specialist",
                         }
                         label = agent_labels.get(next_step, next_step)
+                        if next_step not in visited_specialists:
+                            visited_specialists.append(next_step)
                         yield json.dumps({
                             "type": "status",
                             "content": f"📋 Supervisor routing to {label}..."
@@ -165,31 +194,40 @@ async def chat(request: ChatRequest):
                     if "messages" in sup_data and sup_data["messages"]:
                         message = sup_data["messages"][-1]
                         if message.content and not getattr(message, "tool_calls", None):
+                            final_answer = message.content
                             yield json.dumps({
                                 "type": "answer",
                                 "content": message.content
                             }) + "\n"
 
                 elif "docs_specialist" in event:
+                    if "docs_specialist" not in visited_specialists:
+                        visited_specialists.append("docs_specialist")
                     spec_data = event["docs_specialist"]
                     if "messages" in spec_data and spec_data["messages"]:
                         message = spec_data["messages"][-1]
                         if getattr(message, "tool_calls", None):
+                            t_name = message.tool_calls[0]["name"]
+                            tools_called.append(t_name)
                             yield json.dumps({
                                 "type": "tool_call",
                                 "agent": "docs_specialist",
-                                "tool": message.tool_calls[0]["name"]
+                                "tool": t_name
                             }) + "\n"
 
                 elif "github_specialist" in event:
+                    if "github_specialist" not in visited_specialists:
+                        visited_specialists.append("github_specialist")
                     spec_data = event["github_specialist"]
                     if "messages" in spec_data and spec_data["messages"]:
                         message = spec_data["messages"][-1]
                         if getattr(message, "tool_calls", None):
+                            t_name = message.tool_calls[0]["name"]
+                            tools_called.append(t_name)
                             yield json.dumps({
                                 "type": "tool_call",
                                 "agent": "github_specialist",
-                                "tool": message.tool_calls[0]["name"]
+                                "tool": t_name
                             }) + "\n"
 
                 elif "docs_tools" in event or "github_tools" in event or "tools" in event:
@@ -201,11 +239,13 @@ async def chat(request: ChatRequest):
                 elif "agent" in event:
                     message = event["agent"]["messages"][0]
                     if getattr(message, "tool_calls", None):
+                        tools_called.append(message.tool_calls[0]["name"])
                         yield json.dumps({
                             "type": "tool_call",
                             "tool": message.tool_calls[0]["name"]
                         }) + "\n"
                     elif message.content:
+                        final_answer = message.content
                         yield json.dumps({
                             "type": "answer",
                             "content": message.content
@@ -221,6 +261,21 @@ async def chat(request: ChatRequest):
         finally:
             print("Event generator ended:", thread_id)
             print("MCP session after request:", mcp_client.session)
+            if final_answer:
+                try:
+                    from agent.memory import record_conversation_turn
+                    latency = round(time.perf_counter() - start_time, 2)
+                    await record_conversation_turn(
+                        thread_id=thread_id,
+                        user_query=request.message,
+                        final_answer=final_answer,
+                        visited_specialists=visited_specialists,
+                        tools_called=tools_called,
+                        latency_seconds=latency,
+                    )
+                    print(f"Persisted conversation {thread_id} to AWS RDS PostgreSQL.")
+                except Exception as e:
+                    print(f"Notice: Failed to persist conversation to PostgreSQL: {e}")
             try:
                 tracer.wait_for_futures()
             except Exception:

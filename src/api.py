@@ -10,6 +10,13 @@ PROJECT_DIR = SRC_DIR.parent
 WORKSPACE_DIR = PROJECT_DIR.parent
 sys.path.insert(0, str(SRC_DIR))
 
+if sys.platform == "win32":
+    import asyncio
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except Exception:
+        pass
+
 # Fix Windows console UnicodeEncodeError (cp1252) when printing events
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     try:
@@ -45,7 +52,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.tracers.langchain import LangChainTracer
 
 from agent.tools import mcp_client
@@ -158,12 +165,25 @@ async def chat(request: ChatRequest):
         tools_called = []
         print("Event generator started:", thread_id)
         try:
+            initial_messages = []
+            try:
+                current_state = await graph.aget_state(config)
+                if not current_state.values or not current_state.values.get("messages"):
+                    from agent.memory import get_thread_history
+                    past_turns = await get_thread_history(thread_id)
+                    if past_turns:
+                        print(f"Re-hydrating {len(past_turns)} turn(s) from AWS RDS PostgreSQL for thread: {thread_id}")
+                        for turn in past_turns:
+                            initial_messages.append(HumanMessage(content=turn["user_query"]))
+                            if turn.get("final_answer"):
+                                initial_messages.append(AIMessage(content=turn["final_answer"]))
+            except Exception as e:
+                print(f"Notice: Memory hydration skipped: {e}")
+
+            initial_messages.append(HumanMessage(content=request.message))
+
             async for event in graph.astream(
-                {
-                    "messages": [
-                        HumanMessage(content=request.message)
-                    ]
-                },
+                {"messages": initial_messages},
                 config=config,
                 stream_mode="updates",
             ):
@@ -294,5 +314,12 @@ async def chat(request: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
+    import selectors
+    import asyncio
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    if sys.platform == "win32":
+        config = uvicorn.Config(app, host="0.0.0.0", port=port, loop="asyncio")
+        server = uvicorn.Server(config)
+        asyncio.run(server.serve(), loop_factory=lambda: asyncio.SelectorEventLoop(selectors.SelectSelector()))
+    else:
+        uvicorn.run(app, host="0.0.0.0", port=port)
